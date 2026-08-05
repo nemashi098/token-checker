@@ -2,7 +2,10 @@ import Foundation
 
 enum DomainError: Error, Equatable, LocalizedError, Sendable {
     case keychainTokenMissing
+    case keychainReadFailed(status: Int32)
+    case keychainCacheFailed(status: Int32)
     case anthropicUnauthorized
+    case anthropicOAuthRefreshFailed
     case anthropicRateLimited(retryAfter: TimeInterval?)
     case anthropicHTTP(status: Int)
     case codexCLINotFound
@@ -25,8 +28,14 @@ enum DomainError: Error, Equatable, LocalizedError, Sendable {
         switch self {
         case .keychainTokenMissing:
             return L10n.tr("error.keychain_token_missing", language: language)
+        case .keychainReadFailed(let status):
+            return L10n.format("error.keychain_read_failed", language: language, Int(status))
+        case .keychainCacheFailed(let status):
+            return L10n.format("error.keychain_cache_failed", language: language, Int(status))
         case .anthropicUnauthorized:
             return L10n.tr("error.anthropic_unauthorized", language: language)
+        case .anthropicOAuthRefreshFailed:
+            return L10n.tr("error.anthropic_oauth_refresh_failed", language: language)
         case .anthropicRateLimited(let retryAfter):
             if let sec = retryAfter {
                 let mins = max(1, Int((sec / 60).rounded()))

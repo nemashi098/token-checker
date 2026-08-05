@@ -1,10 +1,18 @@
 import SwiftUI
+import AppKit
 
 /// Claude / Codex 1 サービスぶんの詳細セクション。
 /// どのブランドのセクションかを表す。
 enum ServiceBrand {
     case claude
     case codex
+
+    var tint: Color {
+        switch self {
+        case .claude: Color(red: 0.83, green: 0.38, blue: 0.25)
+        case .codex: Color(red: 0.08, green: 0.53, blue: 0.42)
+        }
+    }
 }
 
 struct ServiceSectionView: View {
@@ -12,17 +20,18 @@ struct ServiceSectionView: View {
     let brand: ServiceBrand
     let result: Result<ServiceUsage, DomainError>?
     let language: AppLanguage
+    let displayMode: UsageDisplayMode
     let loginAction: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                brandMark
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.primary)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                BrandLogoView(brand: brand)
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.primary)
                 Spacer()
+                statusDot
                 Button {
                     loginAction()
                 } label: {
@@ -34,63 +43,112 @@ struct ServiceSectionView: View {
 
             switch result {
             case .none:
-                Text(L10n.tr("status.loading", language: language))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                loadingBlock
             case .some(.success(let usage)):
                 usageBlock(usage)
             case .some(.failure(let err)):
                 errorBlock(err)
             }
         }
+        .padding(12)
+        .background(cardBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     @ViewBuilder
     private func usageBlock(_ usage: ServiceUsage) -> some View {
         if let five = usage.fiveHour {
-            limitRow(label: L10n.tr("window.five_hour", language: language), limit: five)
+            limitRow(
+                label: L10n.tr("window.five_hour", language: language),
+                limit: five,
+                prominent: true,
+                showsReset: true
+            )
         } else {
-            Text(L10n.tr("window.five_hour.no_data", language: language))
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+            noDataRow(L10n.tr("window.five_hour.no_data", language: language))
         }
 
         if let weekly = usage.weekly {
-            secondaryRow(label: L10n.tr("window.weekly", language: language), limit: weekly)
+            limitRow(
+                label: L10n.tr("window.weekly", language: language),
+                limit: weekly,
+                prominent: false,
+                showsReset: true
+            )
         }
         if let sonnet = usage.weeklySonnet {
-            secondaryRow(label: L10n.tr("window.weekly_sonnet", language: language), limit: sonnet)
+            limitRow(
+                label: L10n.tr("window.weekly_sonnet", language: language),
+                limit: sonnet,
+                prominent: false,
+                showsReset: true
+            )
+        }
+        ForEach(usage.scopedWeekly) { scoped in
+            limitRow(
+                label: scoped.title,
+                limit: scoped.limit,
+                prominent: false,
+                showsReset: true
+            )
         }
     }
 
-    private func limitRow(label: String, limit: RateLimit) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
+    private func limitRow(label: String, limit: RateLimit, prominent: Bool, showsReset: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(label)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: prominent ? 13 : 12, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 Spacer()
-                Text("\(limit.percent)%")
-                    .font(.system(size: 12, weight: .bold))
+                Text("\(displayMode.primaryPercent(for: limit))%")
+                    .font(.system(size: prominent ? 18 : 13, weight: .semibold))
+                    .monospacedDigit()
                     .foregroundStyle(color(for: limit.utilization))
+                Text(L10n.tr(displayMode.primaryMetricKey(), language: language))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color.primary.opacity(0.68))
             }
-            ProgressBarView(value: limit.utilization)
-            Text(resetLabel(limit.resetsAt))
-                .font(.system(size: 10))
-                .foregroundStyle(.tertiary)
+            ProgressBarView(
+                value: displayMode.barValue(for: limit),
+                height: prominent ? 7 : 5,
+                tint: color(for: limit.utilization)
+            )
+
+            HStack(spacing: 5) {
+                if showsReset {
+                    resetBadge(limit.resetsAt)
+                }
+                Spacer()
+                Text(L10n.format(
+                    displayMode.secondaryMetricKey(),
+                    language: language,
+                    "\(displayMode.secondaryPercent(for: limit))%"
+                ))
+                    .lineLimit(1)
+            }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(Color.primary.opacity(0.62))
         }
     }
 
-    private func secondaryRow(label: String, limit: RateLimit) -> some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+    private func noDataRow(_ message: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "clock.badge.questionmark")
+                .font(.system(size: 12, weight: .medium))
+            Text(message)
+                .font(.system(size: 12, weight: .medium))
+                .lineLimit(2)
             Spacer()
-            Text("\(limit.percent)%")
-                .font(.system(size: 11))
-                .foregroundStyle(color(for: limit.utilization))
         }
+        .foregroundStyle(Color.primary.opacity(0.68))
+        .padding(.vertical, 2)
     }
 
     private func errorBlock(_ err: DomainError) -> some View {
@@ -112,12 +170,48 @@ struct ServiceSectionView: View {
     }
 
     @ViewBuilder
-    private var brandMark: some View {
-        switch brand {
-        case .claude:
-            Image(systemName: "sparkles")
-        case .codex:
-            Image(systemName: "terminal.fill")
+    private var statusDot: some View {
+        Circle()
+            .fill(statusColor)
+            .frame(width: 7, height: 7)
+            .help(statusHelp)
+    }
+
+    private var loadingBlock: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.small)
+            Text(L10n.tr("status.loading", language: language))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.primary.opacity(0.68))
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var cardBackground: some ShapeStyle {
+        Color(nsColor: .controlBackgroundColor).opacity(0.88)
+    }
+
+    private var statusColor: Color {
+        switch result {
+        case .none:
+            .secondary
+        case .some(.success):
+            .green
+        case .some(.failure):
+            .orange
+        }
+    }
+
+    private var statusHelp: String {
+        switch result {
+        case .none:
+            L10n.tr("status.loading", language: language)
+        case .some(.success):
+            "OK"
+        case .some(.failure):
+            L10n.tr("error.fetch_failed", language: language)
         }
     }
 
@@ -125,6 +219,31 @@ struct ServiceSectionView: View {
         if value < 0.7 { return .green }
         if value < 0.85 { return .orange }
         return .red
+    }
+
+    private func resetBadge(_ date: Date) -> some View {
+        let soon = isResetSoon(date)
+        return HStack(spacing: 4) {
+            Image(systemName: soon ? "hourglass" : "clock.arrow.circlepath")
+                .font(.system(size: 11, weight: .semibold))
+            Text(resetLabel(date))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+        }
+        .foregroundStyle(soon ? Color.orange : Color.primary.opacity(0.62))
+        .padding(.horizontal, soon ? 6 : 0)
+        .padding(.vertical, soon ? 2 : 0)
+        .background {
+            if soon {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(Color.orange.opacity(0.14))
+            }
+        }
+    }
+
+    private func isResetSoon(_ date: Date) -> Bool {
+        let remaining = date.timeIntervalSinceNow
+        return remaining > 0 && remaining <= 90 * 60
     }
 
     private func resetLabel(_ date: Date) -> String {
@@ -143,5 +262,85 @@ struct ServiceSectionView: View {
         formatter.timeStyle = .short
         let absolute = formatter.string(from: date)
         return L10n.format("reset.remaining", language: language, rel, absolute)
+    }
+}
+
+private struct BrandLogoView: View {
+    let brand: ServiceBrand
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(brand.tint.opacity(0.14))
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(brand.tint.opacity(0.22), lineWidth: 1)
+
+            switch brand {
+            case .claude:
+                ClaudeBurstMark()
+                    .stroke(brand.tint, style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                    .frame(width: 16, height: 16)
+            case .codex:
+                OpenAINodeMark()
+                    .stroke(brand.tint, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+                    .frame(width: 18, height: 18)
+            }
+        }
+        .frame(width: 28, height: 28)
+    }
+}
+
+private struct ClaudeBurstMark: Shape {
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let inner = min(rect.width, rect.height) * 0.18
+        let outer = min(rect.width, rect.height) * 0.48
+        var path = Path()
+
+        for index in 0..<12 {
+            let angle = (Double(index) / 12.0) * .pi * 2.0
+            let start = CGPoint(
+                x: center.x + cos(angle) * inner,
+                y: center.y + sin(angle) * inner
+            )
+            let end = CGPoint(
+                x: center.x + cos(angle) * outer,
+                y: center.y + sin(angle) * outer
+            )
+            path.move(to: start)
+            path.addLine(to: end)
+        }
+
+        return path
+    }
+}
+
+private struct OpenAINodeMark: Shape {
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) * 0.34
+        let points = (0..<6).map { index in
+            let angle = (Double(index) / 6.0) * .pi * 2.0 - .pi / 6.0
+            return CGPoint(
+                x: center.x + cos(angle) * radius,
+                y: center.y + sin(angle) * radius
+            )
+        }
+
+        var path = Path()
+        for index in 0..<6 {
+            let current = points[index]
+            let next = points[(index + 1) % 6]
+            let control = CGPoint(
+                x: center.x + (current.x - center.x) * 0.22 + (next.x - center.x) * 0.22,
+                y: center.y + (current.y - center.y) * 0.22 + (next.y - center.y) * 0.22
+            )
+            path.move(to: current)
+            path.addQuadCurve(to: next, control: control)
+            path.move(to: current)
+            path.addLine(to: center)
+        }
+
+        return path
     }
 }

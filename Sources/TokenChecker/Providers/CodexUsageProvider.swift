@@ -16,7 +16,8 @@ final class CodexUsageProvider: UsageProvider, @unchecked Sendable {
             return ServiceUsage(
                 fiveHour: dto.fiveHourRateLimit(),
                 weekly: dto.weeklyRateLimit(),
-                weeklySonnet: nil
+                weeklySonnet: nil,
+                scopedWeekly: []
             )
         } catch DomainError.codexProcessExited {
             // 一度落ちていたら再起動して再試行
@@ -26,7 +27,8 @@ final class CodexUsageProvider: UsageProvider, @unchecked Sendable {
             return ServiceUsage(
                 fiveHour: dto.fiveHourRateLimit(),
                 weekly: dto.weeklyRateLimit(),
-                weeklySonnet: nil
+                weeklySonnet: nil,
+                scopedWeekly: []
             )
         }
     }

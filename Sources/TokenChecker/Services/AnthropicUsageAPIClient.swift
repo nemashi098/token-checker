@@ -86,11 +86,13 @@ struct AnthropicUsageDTO: Decodable, Sendable {
     let fiveHour: BucketDTO?
     let sevenDay: BucketDTO?
     let sevenDaySonnet: BucketDTO?
+    let limits: [LimitDTO]?
 
     enum CodingKeys: String, CodingKey {
         case fiveHour = "five_hour"
         case sevenDay = "seven_day"
         case sevenDaySonnet = "seven_day_sonnet"
+        case limits
     }
 
     struct BucketDTO: Decodable, Sendable {
@@ -100,6 +102,36 @@ struct AnthropicUsageDTO: Decodable, Sendable {
         enum CodingKeys: String, CodingKey {
             case utilization
             case resetsAt = "resets_at"
+        }
+    }
+
+    struct LimitDTO: Decodable, Sendable {
+        let kind: String?
+        let group: String?
+        let percent: Double?
+        let resetsAt: String?
+        let scope: ScopeDTO?
+
+        enum CodingKeys: String, CodingKey {
+            case kind
+            case group
+            case percent
+            case resetsAt = "resets_at"
+            case scope
+        }
+    }
+
+    struct ScopeDTO: Decodable, Sendable {
+        let model: ModelDTO?
+    }
+
+    struct ModelDTO: Decodable, Sendable {
+        let id: String?
+        let displayName: String?
+
+        enum CodingKeys: String, CodingKey {
+            case id
+            case displayName = "display_name"
         }
     }
 }
@@ -112,6 +144,58 @@ extension AnthropicUsageDTO.BucketDTO {
             return nil
         }
         return RateLimit(utilization: utilization / 100.0, resetsAt: date)
+    }
+}
+
+extension AnthropicUsageDTO {
+    func scopedWeeklyRateLimits(defaultResetsAt: Date?) -> [NamedRateLimit] {
+        var seenIDs = Set<String>()
+        return (limits ?? []).compactMap { entry in
+            guard entry.group == "weekly", entry.kind == "weekly_scoped" else { return nil }
+            guard let percent = entry.percent, percent.isFinite else { return nil }
+            guard let modelName = entry.scope?.model?.displayName?.trimmedNonEmpty else { return nil }
+            guard let date = Self.parseDate(entry.resetsAt) ?? defaultResetsAt else { return nil }
+
+            let identity = entry.scope?.model?.id?.trimmedNonEmpty ?? modelName
+            let slug = Self.slug(identity)
+            guard !slug.isEmpty else { return nil }
+            let id = "claude-weekly-scoped-\(slug)"
+            guard seenIDs.insert(id).inserted else { return nil }
+
+            return NamedRateLimit(
+                id: id,
+                title: "\(modelName) only",
+                limit: RateLimit(utilization: percent / 100.0, resetsAt: date)
+            )
+        }
+    }
+
+    private static func parseDate(_ value: String?) -> Date? {
+        guard let value else { return nil }
+        return ISO8601DateFormatter.standard.date(from: value)
+            ?? ISO8601DateFormatter.withFractional.date(from: value)
+    }
+
+    private static func slug(_ value: String) -> String {
+        var result = ""
+        var lastWasDash = false
+        for scalar in value.lowercased().unicodeScalars {
+            if CharacterSet.alphanumerics.contains(scalar) {
+                result.unicodeScalars.append(scalar)
+                lastWasDash = false
+            } else if !lastWasDash {
+                result.append("-")
+                lastWasDash = true
+            }
+        }
+        return result.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+    }
+}
+
+private extension String {
+    var trimmedNonEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 

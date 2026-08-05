@@ -3,6 +3,7 @@ import SwiftUI
 struct ProgressBarView: View {
     let value: Double   // 0.0〜1.0
     var height: CGFloat = 6
+    var tint: Color? = nil
 
     var body: some View {
         GeometryReader { geo in
@@ -10,7 +11,7 @@ struct ProgressBarView: View {
                 RoundedRectangle(cornerRadius: height / 2)
                     .fill(Color.gray.opacity(0.2))
                 RoundedRectangle(cornerRadius: height / 2)
-                    .fill(color)
+                    .fill(tint ?? color)
                     .frame(width: geo.size.width * clamped)
             }
         }

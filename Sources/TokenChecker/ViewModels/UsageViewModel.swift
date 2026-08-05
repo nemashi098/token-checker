@@ -9,20 +9,38 @@ final class UsageViewModel {
     // nonisolated 化する。providers 自体は immutable なので Sendable 違反は起きない。
     private nonisolated let claudeProvider: UsageProvider
     private nonisolated let codexProvider: UsageProvider
+    private let alertNotifier: UsageAlertNotifier
 
     var snapshot: UsageSnapshot = .empty
     var isLoading: Bool = false
     var pollingInterval: PollingInterval {
         didSet { persistInterval() }
     }
+    var displayMode: UsageDisplayMode {
+        didSet { persistDisplayMode() }
+    }
+    private(set) var notificationsEnabled: Bool {
+        didSet { persistNotificationsEnabled() }
+    }
+    var alertThreshold: UsageAlertThreshold {
+        didSet {
+            persistAlertThreshold()
+            evaluateAlertsIfNeeded()
+        }
+    }
 
     init(
         claudeProvider: UsageProvider = ClaudeUsageProvider(),
-        codexProvider: UsageProvider = CodexUsageProvider()
+        codexProvider: UsageProvider = CodexUsageProvider(),
+        alertNotifier: UsageAlertNotifier = .init()
     ) {
         self.claudeProvider = claudeProvider
         self.codexProvider = codexProvider
+        self.alertNotifier = alertNotifier
         self.pollingInterval = Self.loadPersistedInterval()
+        self.displayMode = Self.loadPersistedDisplayMode()
+        self.notificationsEnabled = Self.loadPersistedNotificationsEnabled()
+        self.alertThreshold = Self.loadPersistedAlertThreshold()
     }
 
     /// `task(id: pollingInterval)` から駆動するメインループ。
@@ -60,7 +78,24 @@ final class UsageViewModel {
         async let codex = fetchCodex()
 
         let (c, x) = await (claude, codex)
-        snapshot = UsageSnapshot(claude: c, codex: x, fetchedAt: Date())
+        let nextSnapshot = UsageSnapshot(claude: c, codex: x, fetchedAt: Date())
+        snapshot = nextSnapshot
+        evaluateAlertsIfNeeded(snapshot: nextSnapshot)
+    }
+
+    func setNotificationsEnabled(_ enabled: Bool) {
+        guard enabled != notificationsEnabled else { return }
+        if enabled {
+            Task {
+                let granted = await alertNotifier.requestAuthorization()
+                notificationsEnabled = granted
+                if granted {
+                    evaluateAlertsIfNeeded()
+                }
+            }
+        } else {
+            notificationsEnabled = false
+        }
     }
 
     private func fetchClaude() async -> Result<ServiceUsage, DomainError> {
@@ -122,6 +157,9 @@ final class UsageViewModel {
     // MARK: - 永続化
 
     private static let intervalKey = "pollingInterval"
+    private static let displayModeKey = "usageDisplayMode"
+    private static let notificationsEnabledKey = "usageNotificationsEnabled"
+    private static let alertThresholdKey = "usageAlertThreshold"
 
     private static func loadPersistedInterval() -> PollingInterval {
         let raw = UserDefaults.standard.integer(forKey: intervalKey)
@@ -130,5 +168,42 @@ final class UsageViewModel {
 
     private func persistInterval() {
         UserDefaults.standard.set(pollingInterval.rawValue, forKey: Self.intervalKey)
+    }
+
+    private static func loadPersistedDisplayMode() -> UsageDisplayMode {
+        guard let raw = UserDefaults.standard.string(forKey: displayModeKey) else { return .default }
+        return UsageDisplayMode(rawValue: raw) ?? .default
+    }
+
+    private func persistDisplayMode() {
+        UserDefaults.standard.set(displayMode.rawValue, forKey: Self.displayModeKey)
+    }
+
+    private static func loadPersistedNotificationsEnabled() -> Bool {
+        UserDefaults.standard.bool(forKey: notificationsEnabledKey)
+    }
+
+    private func persistNotificationsEnabled() {
+        UserDefaults.standard.set(notificationsEnabled, forKey: Self.notificationsEnabledKey)
+    }
+
+    private static func loadPersistedAlertThreshold() -> UsageAlertThreshold {
+        let raw = UserDefaults.standard.integer(forKey: alertThresholdKey)
+        return UsageAlertThreshold(rawValue: raw) ?? .default
+    }
+
+    private func persistAlertThreshold() {
+        UserDefaults.standard.set(alertThreshold.rawValue, forKey: Self.alertThresholdKey)
+    }
+
+    private func evaluateAlertsIfNeeded(snapshot targetSnapshot: UsageSnapshot? = nil) {
+        guard notificationsEnabled else { return }
+        let rawLanguage = UserDefaults.standard.string(forKey: LanguageStore.languageKey)
+        let language = rawLanguage.flatMap(AppLanguage.init(rawValue:)) ?? .default
+        alertNotifier.evaluate(
+            snapshot: targetSnapshot ?? snapshot,
+            threshold: alertThreshold,
+            language: language
+        )
     }
 }

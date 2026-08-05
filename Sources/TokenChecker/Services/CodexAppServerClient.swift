@@ -176,7 +176,7 @@ actor CodexAppServerClient {
     /// 解決順序:
     ///   1. UserDefaults `codexPath` … `defaults write <bundle-id> codexPath /full/path`
     ///      で設定できる手動 escape hatch。未知の Node 環境管理ツールでも最終的に救える。
-    ///   2. 既知の候補パス（Homebrew / nodebrew / volta / bun / asdf / nvm / fnm）。
+    ///   2. 既知の候補パス（Codex/ChatGPT.app / Homebrew / nodebrew / volta / bun / asdf / nvm / fnm）。
     ///      シェル spawn を伴わないので最速。
     ///   3. ユーザーのログインシェル経由で `command -v codex`。
     ///      上記で見つからない場合の最終手段。3 秒でタイムアウト。
@@ -201,9 +201,12 @@ actor CodexAppServerClient {
 
     /// 既知のインストール先候補。nvm / fnm はバージョン番号が中間ディレクトリに入るので
     /// 実在するエントリを降順に展開（新しい Node バージョンを優先）。
-    private static func defaultCandidates() -> [String] {
-        let home = NSHomeDirectory()
+    static func defaultCandidates(home: String = NSHomeDirectory()) -> [String] {
         var paths: [String] = [
+            "/Applications/Codex.app/Contents/Resources/codex",
+            "\(home)/Applications/Codex.app/Contents/Resources/codex",
+            "/Applications/ChatGPT.app/Contents/Resources/codex",
+            "\(home)/Applications/ChatGPT.app/Contents/Resources/codex",
             "/opt/homebrew/bin/codex",
             "/usr/local/bin/codex",
             "/usr/bin/codex",

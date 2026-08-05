@@ -15,6 +15,7 @@ struct DonutChartView: View {
     var size: CGFloat = 18
     var lineWidth: CGFloat = 4
     var center: DonutCenter = .none
+    var tint: Color? = nil
 
     var body: some View {
         ZStack {
@@ -26,7 +27,7 @@ struct DonutChartView: View {
             Circle()
                 .trim(from: 0, to: clamped)
                 .stroke(
-                    color,
+                    tint ?? color,
                     style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                 )
                 .frame(width: size - lineWidth, height: size - lineWidth)
