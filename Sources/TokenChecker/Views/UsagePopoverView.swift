@@ -15,7 +15,9 @@ struct UsagePopoverView: View {
             ServiceSectionView(
                 title: "Claude Code",
                 brand: .claude,
+                serviceID: "claude",
                 result: viewModel.snapshot.claude,
+                trends: viewModel.trends,
                 language: language,
                 displayMode: viewModel.displayMode,
                 loginAction: { viewModel.openClaudeLogin() }
@@ -24,7 +26,9 @@ struct UsagePopoverView: View {
             ServiceSectionView(
                 title: "Codex",
                 brand: .codex,
+                serviceID: "codex",
                 result: viewModel.snapshot.codex,
+                trends: viewModel.trends,
                 language: language,
                 displayMode: viewModel.displayMode,
                 loginAction: { viewModel.openCodexLogin() }

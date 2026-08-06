@@ -19,6 +19,8 @@
 "error.network" = "网络错误：%@";
 "error.timeout" = "请求超时。";
 "error.unknown" = "原因不明";
+"alert.depletion.body" = "%@ 正以 −%@%%/时 的速度消耗，将在 %@ 后达到上限（重置前）。";
+"alert.depletion.title" = "%@ 即将达到上限";
 "alert.low_remaining.body" = "%@ 剩余 %d%%（阈值 %d%%）。";
 "alert.low_remaining.title" = "%@ 剩余量偏低";
 "alert.threshold.percent" = "%d%% 以下";
@@ -49,6 +51,9 @@
 "settings.notifications" = "低剩余量通知";
 "settings.refresh_interval" = "刷新间隔";
 "status.loading" = "获取中...";
+"trend.depletes_in" = "%@ 后耗尽";
+"trend.holds_until_reset" = "可撑到重置";
+"trend.per_hour" = "−%@%%/时";
 "window.five_hour" = "5 小时";
 "window.five_hour.no_data" = "没有 5 小时窗口数据";
 "window.weekly" = "每周";

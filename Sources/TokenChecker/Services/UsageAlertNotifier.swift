@@ -18,12 +18,30 @@ final class UsageAlertNotifier: NSObject, UNUserNotificationCenterDelegate, @unc
         }
     }
 
-    func evaluate(snapshot: UsageSnapshot, threshold: UsageAlertThreshold, language: AppLanguage) {
+    func evaluate(
+        snapshot: UsageSnapshot,
+        trends: [String: UsageTrend] = [:],
+        threshold: UsageAlertThreshold,
+        language: AppLanguage
+    ) {
         for window in Self.windows(from: snapshot, language: language) {
-            guard window.limit.remainingPercent <= threshold.rawValue else { continue }
-            let key = "\(window.id)-\(Int(window.limit.resetsAt.timeIntervalSince1970))-\(threshold.rawValue)"
-            guard notifiedKeys.insert(key).inserted else { continue }
-            send(window: window, threshold: threshold, language: language)
+            if window.limit.remainingPercent <= threshold.rawValue {
+                let key = "\(window.id)-\(Int(window.limit.resetsAt.timeIntervalSince1970))-\(threshold.rawValue)"
+                if notifiedKeys.insert(key).inserted {
+                    send(window: window, threshold: threshold, language: language)
+                }
+            }
+
+            // 枯渇予測: 現在の消費ペースだとリセット前に 100% へ達する場合、
+            // しきい値を待たずに一度だけ知らせる（リセット周期ごとに 1 回）。
+            if let trend = trends[window.id],
+               let depletionAt = trend.predictedDepletionAt,
+               depletionAt < window.limit.resetsAt {
+                let key = "depletion-\(window.id)-\(Int(window.limit.resetsAt.timeIntervalSince1970))"
+                if notifiedKeys.insert(key).inserted {
+                    sendDepletion(window: window, trend: trend, depletionAt: depletionAt, language: language)
+                }
+            }
         }
     }
 
@@ -57,6 +75,46 @@ final class UsageAlertNotifier: NSObject, UNUserNotificationCenterDelegate, @unc
             trigger: nil
         )
         center.add(request)
+    }
+
+    private func sendDepletion(
+        window: AlertWindow,
+        trend: UsageTrend,
+        depletionAt: Date,
+        language: AppLanguage
+    ) {
+        let content = UNMutableNotificationContent()
+        content.title = L10n.format(
+            "alert.depletion.title",
+            language: language,
+            window.serviceName
+        )
+        content.body = L10n.format(
+            "alert.depletion.body",
+            language: language,
+            window.windowName,
+            String(format: "%.1f", trend.ratePerHour * 100),
+            Self.remainingString(to: depletionAt, language: language)
+        )
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: "tokenchecker-depletion-\(window.id)-\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        center.add(request)
+    }
+
+    private static func remainingString(to date: Date, language: AppLanguage) -> String {
+        let formatter = DateComponentsFormatter()
+        var calendar = Calendar.current
+        calendar.locale = language.locale
+        formatter.calendar = calendar
+        formatter.allowedUnits = [.day, .hour, .minute]
+        formatter.unitsStyle = .abbreviated
+        formatter.maximumUnitCount = 2
+        return formatter.string(from: Date(), to: date) ?? "—"
     }
 
     private static func windows(from snapshot: UsageSnapshot, language: AppLanguage) -> [AlertWindow] {

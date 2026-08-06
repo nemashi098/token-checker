@@ -1,42 +1,43 @@
 import Foundation
 @testable import TokenChecker
-import XCTest
+import Testing
 
+// XCTest ではなく Swift Testing を使う（CodexExecutableDiscoveryTests と同じ理由）。
 @MainActor
-final class LanguageSelectionTests: XCTestCase {
-    func testLanguageStoreDefaultsToJapaneseWhenNoPreferenceExists() {
+struct LanguageSelectionTests {
+    @Test func languageStoreDefaultsToJapaneseWhenNoPreferenceExists() {
         let defaults = makeDefaults()
 
         let store = LanguageStore(defaults: defaults)
 
-        XCTAssertEqual(store.selectedLanguage, .japanese)
+        #expect(store.selectedLanguage == .japanese)
     }
 
-    func testLanguageStorePersistsSelectedLanguage() {
+    @Test func languageStorePersistsSelectedLanguage() {
         let defaults = makeDefaults()
         let store = LanguageStore(defaults: defaults)
 
         store.selectedLanguage = .simplifiedChinese
 
-        XCTAssertEqual(defaults.string(forKey: LanguageStore.languageKey), "zh-Hans")
-        XCTAssertEqual(LanguageStore(defaults: defaults).selectedLanguage, .simplifiedChinese)
+        #expect(defaults.string(forKey: LanguageStore.languageKey) == "zh-Hans")
+        #expect(LanguageStore(defaults: defaults).selectedLanguage == .simplifiedChinese)
     }
 
-    func testLocalizationLookupUsesSelectedLanguageBundle() {
-        XCTAssertEqual(L10n.tr("settings.refresh_interval", language: .japanese), "更新間隔")
-        XCTAssertEqual(L10n.tr("settings.refresh_interval", language: .english), "Refresh interval")
-        XCTAssertEqual(L10n.tr("settings.refresh_interval", language: .simplifiedChinese), "刷新间隔")
+    @Test func localizationLookupUsesSelectedLanguageBundle() {
+        #expect(L10n.tr("settings.refresh_interval", language: .japanese) == "更新間隔")
+        #expect(L10n.tr("settings.refresh_interval", language: .english) == "Refresh interval")
+        #expect(L10n.tr("settings.refresh_interval", language: .simplifiedChinese) == "刷新间隔")
     }
 
-    func testLocalizationFormattingUsesSelectedLanguageBundle() {
-        XCTAssertEqual(L10n.format("footer.updated_at", language: .english, "10:00"), "Updated: 10:00")
-        XCTAssertEqual(L10n.format("footer.updated_at", language: .simplifiedChinese, "10:00"), "更新：10:00")
+    @Test func localizationFormattingUsesSelectedLanguageBundle() {
+        #expect(L10n.format("footer.updated_at", language: .english, "10:00") == "Updated: 10:00")
+        #expect(L10n.format("footer.updated_at", language: .simplifiedChinese, "10:00") == "更新：10:00")
     }
 
-    func testPollingIntervalLabelsUseSelectedLanguage() {
-        XCTAssertEqual(PollingInterval.sec30.label(language: .japanese), "30秒")
-        XCTAssertEqual(PollingInterval.min5.label(language: .english), "5 min")
-        XCTAssertEqual(PollingInterval.min10.label(language: .simplifiedChinese), "10 分钟")
+    @Test func pollingIntervalLabelsUseSelectedLanguage() {
+        #expect(PollingInterval.sec30.label(language: .japanese) == "30秒")
+        #expect(PollingInterval.min5.label(language: .english) == "5 min")
+        #expect(PollingInterval.min10.label(language: .simplifiedChinese) == "10 分钟")
     }
 
     private func makeDefaults() -> UserDefaults {

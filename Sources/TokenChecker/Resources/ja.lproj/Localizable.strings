@@ -19,6 +19,8 @@
 "error.network" = "ネットワークエラー: %@";
 "error.timeout" = "通信がタイムアウトしました。";
 "error.unknown" = "原因不明";
+"alert.depletion.body" = "「%@」は −%@%%/時 のペースのため、あと %@ で上限に達します（リセット前）。";
+"alert.depletion.title" = "%@ が上限に達しそうです";
 "alert.low_remaining.body" = "%@ が残り %d%% です（しきい値 %d%%）。";
 "alert.low_remaining.title" = "%@ の残量が少なくなっています";
 "alert.threshold.percent" = "%d%% 以下";
@@ -49,6 +51,9 @@
 "settings.notifications" = "低残量通知";
 "settings.refresh_interval" = "更新間隔";
 "status.loading" = "取得中…";
+"trend.depletes_in" = "あと %@ で枯渇";
+"trend.holds_until_reset" = "リセットまで持つ";
+"trend.per_hour" = "−%@%%/時";
 "window.five_hour" = "5時間";
 "window.five_hour.no_data" = "5時間ウィンドウのデータがありません";
 "window.weekly" = "週次";

@@ -20,15 +20,25 @@ enum L10n {
 
     private static var resourceBundleCandidates: [Bundle] {
         let bundleName = "TokenChecker_TokenChecker.bundle"
+        // Bundle(for:) 起点の候補は `swift test` 用。テスト実行時は Bundle.main が
+        // テストランナー (swiftpm-testing-helper) になり、リソースバンドルは
+        // .build/debug/ 直下（テストバンドルの隣）に置かれるため、
+        // モジュール内クラスから逆引きしないと到達できない。
+        let moduleBundleURL = Bundle(for: BundleToken.self).bundleURL
         let urls = [
             Bundle.main.resourceURL?.appendingPathComponent(bundleName),
             Bundle.main.bundleURL.appendingPathComponent(bundleName),
             Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/\(bundleName)"),
+            moduleBundleURL.appendingPathComponent(bundleName),
+            moduleBundleURL.deletingLastPathComponent().appendingPathComponent(bundleName),
         ].compactMap { $0 }
 
         let bundles = urls.compactMap { Bundle(url: $0) }
         return bundles.isEmpty ? [.main] : bundles
     }
+
+    /// Bundle(for:) でモジュールの実体位置を引くためのアンカー。
+    private final class BundleToken {}
 
     private static func localizedBundle(language: AppLanguage, in bundle: Bundle) -> Bundle? {
         let names = [language.resourceName, language.resourceName.lowercased()]

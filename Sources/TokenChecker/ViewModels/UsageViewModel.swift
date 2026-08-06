@@ -10,8 +10,11 @@ final class UsageViewModel {
     private nonisolated let claudeProvider: UsageProvider
     private nonisolated let codexProvider: UsageProvider
     private let alertNotifier: UsageAlertNotifier
+    private let trendStore = UsageTrendStore()
 
     var snapshot: UsageSnapshot = .empty
+    /// ウィンドウ ID → 消費ペース。ID 規約は UsageTrendStore 参照。
+    private(set) var trends: [String: UsageTrend] = [:]
     var isLoading: Bool = false
     var pollingInterval: PollingInterval {
         didSet { persistInterval() }
@@ -80,6 +83,7 @@ final class UsageViewModel {
         let (c, x) = await (claude, codex)
         let nextSnapshot = UsageSnapshot(claude: c, codex: x, fetchedAt: Date())
         snapshot = nextSnapshot
+        trends = trendStore.update(snapshot: nextSnapshot)
         evaluateAlertsIfNeeded(snapshot: nextSnapshot)
     }
 
@@ -202,6 +206,7 @@ final class UsageViewModel {
         let language = rawLanguage.flatMap(AppLanguage.init(rawValue:)) ?? .default
         alertNotifier.evaluate(
             snapshot: targetSnapshot ?? snapshot,
+            trends: trends,
             threshold: alertThreshold,
             language: language
         )

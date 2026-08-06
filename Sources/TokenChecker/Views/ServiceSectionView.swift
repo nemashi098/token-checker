@@ -18,7 +18,10 @@ enum ServiceBrand {
 struct ServiceSectionView: View {
     let title: String
     let brand: ServiceBrand
+    /// トレンド辞書 (UsageViewModel.trends) を引くためのウィンドウ ID 接頭辞 ("claude" / "codex")。
+    let serviceID: String
     let result: Result<ServiceUsage, DomainError>?
+    let trends: [String: UsageTrend]
     let language: AppLanguage
     let displayMode: UsageDisplayMode
     let loginAction: () -> Void
@@ -66,7 +69,8 @@ struct ServiceSectionView: View {
                 label: L10n.tr("window.five_hour", language: language),
                 limit: five,
                 prominent: true,
-                showsReset: true
+                showsReset: true,
+                trend: trends["\(serviceID)-five-hour"]
             )
         } else {
             noDataRow(L10n.tr("window.five_hour.no_data", language: language))
@@ -77,7 +81,8 @@ struct ServiceSectionView: View {
                 label: L10n.tr("window.weekly", language: language),
                 limit: weekly,
                 prominent: false,
-                showsReset: true
+                showsReset: true,
+                trend: trends["\(serviceID)-weekly"]
             )
         }
         if let sonnet = usage.weeklySonnet {
@@ -85,7 +90,8 @@ struct ServiceSectionView: View {
                 label: L10n.tr("window.weekly_sonnet", language: language),
                 limit: sonnet,
                 prominent: false,
-                showsReset: true
+                showsReset: true,
+                trend: trends["\(serviceID)-weekly-sonnet"]
             )
         }
         ForEach(usage.scopedWeekly) { scoped in
@@ -93,12 +99,19 @@ struct ServiceSectionView: View {
                 label: scoped.title,
                 limit: scoped.limit,
                 prominent: false,
-                showsReset: true
+                showsReset: true,
+                trend: trends["\(serviceID)-\(scoped.id)"]
             )
         }
     }
 
-    private func limitRow(label: String, limit: RateLimit, prominent: Bool, showsReset: Bool) -> some View {
+    private func limitRow(
+        label: String,
+        limit: RateLimit,
+        prominent: Bool,
+        showsReset: Bool,
+        trend: UsageTrend? = nil
+    ) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(label)
@@ -135,7 +148,49 @@ struct ServiceSectionView: View {
             }
             .font(.system(size: 11, weight: .medium))
             .foregroundStyle(Color.primary.opacity(0.62))
+
+            if let trend {
+                trendRow(trend: trend, limit: limit)
+            }
         }
+    }
+
+    /// 消費ペースの行。測定できる消費があるときだけ表示される。
+    /// リセット前に枯渇する予測なら警告色で「あと◯◯で枯渇」を出す。
+    private func trendRow(trend: UsageTrend, limit: RateLimit) -> some View {
+        let depletesBeforeReset = trend.predictedDepletionAt.map { $0 < limit.resetsAt } ?? false
+        let rate = L10n.format(
+            "trend.per_hour",
+            language: language,
+            String(format: "%.1f", trend.ratePerHour * 100)
+        )
+        let status: String
+        if depletesBeforeReset, let depletionAt = trend.predictedDepletionAt {
+            status = L10n.format("trend.depletes_in", language: language, remainingLabel(to: depletionAt))
+        } else {
+            status = L10n.tr("trend.holds_until_reset", language: language)
+        }
+
+        return HStack(spacing: 4) {
+            Image(systemName: depletesBeforeReset ? "exclamationmark.triangle.fill" : "chart.line.downtrend.xyaxis")
+                .font(.system(size: 10, weight: .semibold))
+            Text("\(rate) · \(status)")
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+        }
+        .font(.system(size: 11, weight: .medium))
+        .foregroundStyle(depletesBeforeReset ? Color.red : Color.primary.opacity(0.55))
+    }
+
+    private func remainingLabel(to date: Date) -> String {
+        let formatter = DateComponentsFormatter()
+        var calendar = Calendar.current
+        calendar.locale = language.locale
+        formatter.calendar = calendar
+        formatter.allowedUnits = [.day, .hour, .minute]
+        formatter.unitsStyle = .abbreviated
+        formatter.maximumUnitCount = 2
+        return formatter.string(from: Date(), to: date) ?? "—"
     }
 
     private func noDataRow(_ message: String) -> some View {

@@ -19,6 +19,8 @@
 "error.network" = "Network error: %@";
 "error.timeout" = "The request timed out.";
 "error.unknown" = "Unknown cause";
+"alert.depletion.body" = "%@ is burning −%@%%/hr and will hit its limit in %@ (before the reset).";
+"alert.depletion.title" = "%@ is on pace to hit its limit";
 "alert.low_remaining.body" = "%@ has %d%% left (threshold %d%%).";
 "alert.low_remaining.title" = "%@ is running low";
 "alert.threshold.percent" = "%d%% or less";
@@ -49,6 +51,9 @@
 "settings.notifications" = "Low remaining alerts";
 "settings.refresh_interval" = "Refresh interval";
 "status.loading" = "Fetching...";
+"trend.depletes_in" = "empty in %@";
+"trend.holds_until_reset" = "lasts until reset";
+"trend.per_hour" = "−%@%%/hr";
 "window.five_hour" = "5 hours";
 "window.five_hour.no_data" = "No 5-hour window data";
 "window.weekly" = "Weekly";
