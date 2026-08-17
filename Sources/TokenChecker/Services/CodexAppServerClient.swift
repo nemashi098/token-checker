@@ -550,6 +550,8 @@ struct CodexRateLimitsDTO: Decodable, Sendable {
 
     struct RateLimitSnapshot: Decodable, Sendable {
         let limitId: String?
+        /// モデル別枠の表示名（例: "GPT-5.3-Codex-Spark"）。メイン枠では null。
+        let limitName: String?
         let primary: Window?
         let secondary: Window?
         let planType: String?
@@ -571,6 +573,27 @@ extension CodexRateLimitsDTO {
     /// 週次 (10080 分) ウィンドウを抽出。
     func weeklyRateLimit() -> RateLimit? {
         window(forDurationMins: 10080).flatMap(Self.toRateLimit)
+    }
+
+    /// `rateLimitsByLimitId` に入っているモデル別の枠を抽出する
+    /// （Claude の「Fable only」に相当。例: "codex_bengalfox" = GPT-5.3-Codex-Spark）。
+    ///
+    /// 含める条件:
+    ///   - `limitName` がある（メイン枠は limitName が null なので自然に除外される）
+    ///   - メイン `rateLimits` と同じ limitId ではない（二重表示防止）
+    ///   - primary ウィンドウが有効値を持つ
+    /// key ソートで表示順を安定させる（Dictionary の順序は起動ごとに変わるため）。
+    func scopedWeeklyLimits() -> [NamedRateLimit] {
+        let mainId = rateLimits?.limitId
+        return (rateLimitsByLimitId ?? [:])
+            .sorted(by: { $0.key < $1.key })
+            .compactMap { key, snap in
+                guard key != mainId,
+                      let title = snap.limitName, !title.isEmpty,
+                      let window = snap.primary,
+                      let limit = Self.toRateLimit(window) else { return nil }
+                return NamedRateLimit(id: key, title: title, limit: limit)
+            }
     }
 
     /// 指定分数のウィンドウを探す。primary/secondary 両方を見る。

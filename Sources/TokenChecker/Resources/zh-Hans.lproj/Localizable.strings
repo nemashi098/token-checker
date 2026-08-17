@@ -56,5 +56,6 @@
 "trend.per_hour" = "−%@%%/时";
 "window.five_hour" = "5 小时";
 "window.five_hour.no_data" = "没有 5 小时窗口数据";
+"window.five_hour.not_offered" = "此套餐仅有每周限额（无 5 小时窗口）";
 "window.weekly" = "每周";
 "window.weekly_sonnet" = "每周（Sonnet）";

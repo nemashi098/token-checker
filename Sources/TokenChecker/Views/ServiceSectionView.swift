@@ -72,6 +72,10 @@ struct ServiceSectionView: View {
                 showsReset: true,
                 trend: trends["\(serviceID)-five-hour"]
             )
+        } else if usage.weekly != nil {
+            // 週次は取れているのに 5h が無い＝このプランに 5h 枠が存在しない
+            // （Codex の prolite 等）。「データがありません」だとエラーに見えるため区別する
+            noDataRow(L10n.tr("window.five_hour.not_offered", language: language))
         } else {
             noDataRow(L10n.tr("window.five_hour.no_data", language: language))
         }

@@ -56,5 +56,6 @@
 "trend.per_hour" = "−%@%%/時";
 "window.five_hour" = "5時間";
 "window.five_hour.no_data" = "5時間ウィンドウのデータがありません";
+"window.five_hour.not_offered" = "このプランは週次枠のみ（5時間枠なし）";
 "window.weekly" = "週次";
 "window.weekly_sonnet" = "週次 (Sonnet)";

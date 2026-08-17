@@ -56,5 +56,6 @@
 "trend.per_hour" = "−%@%%/hr";
 "window.five_hour" = "5 hours";
 "window.five_hour.no_data" = "No 5-hour window data";
+"window.five_hour.not_offered" = "This plan has weekly limits only (no 5-hour window)";
 "window.weekly" = "Weekly";
 "window.weekly_sonnet" = "Weekly (Sonnet)";
