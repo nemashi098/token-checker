@@ -9,6 +9,17 @@ enum L10n {
         String(format: tr(key, language: language), locale: language.locale, arguments: arguments)
     }
 
+    /// リソースバンドル内の同梱ファイル（ロゴ画像など lproj 以外）の URL を引く。
+    /// 探索順は `resourceBundleCandidates` と同じなので、アプリ実行時と `swift test` の両方で届く。
+    static func resourceURL(forResource name: String, withExtension ext: String) -> URL? {
+        for bundle in resourceBundleCandidates {
+            if let url = bundle.url(forResource: name, withExtension: ext) {
+                return url
+            }
+        }
+        return nil
+    }
+
     private static func bundle(for language: AppLanguage) -> Bundle {
         for bundle in resourceBundleCandidates {
             if let localized = localizedBundle(language: language, in: bundle) {

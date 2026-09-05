@@ -169,6 +169,32 @@ actor CodexAppServerClient {
         }
     }
 
+    /// リセット権を 1 枚使う（`account/rateLimitResetCredit/consume`）。
+    ///
+    /// - `idempotencyKey` は 1 回の操作につき 1 つ（UUID）。同じ鍵で再送しても二重消費されない。
+    /// - `creditId` は省略し、バックエンドに次の 1 枚を選ばせる。
+    /// - 権利を消費する操作なので、呼び出し側で必ずユーザー確認を挟むこと。
+    func consumeResetCredit(idempotencyKey: String) async throws -> ResetCreditRedeemOutcome {
+        let params = ConsumeResetCreditParams(idempotencyKey: idempotencyKey, creditId: nil)
+        let envelope = try await request(method: "account/rateLimitResetCredit/consume", params: params)
+        if let error = envelope.error {
+            throw DomainError.codexRPCError(message: error.message)
+        }
+        guard let result = envelope.result else {
+            throw DomainError.codexRPCError(message: "missing result for account/rateLimitResetCredit/consume")
+        }
+        let dto: ConsumeResetCreditResponseDTO
+        do {
+            dto = try result.decode(as: ConsumeResetCreditResponseDTO.self)
+        } catch {
+            throw DomainError.decoding("codex resetCredit: \(error.localizedDescription)")
+        }
+        guard let outcome = ResetCreditRedeemOutcome(rawValue: dto.outcome) else {
+            throw DomainError.decoding("codex resetCredit: unknown outcome '\(dto.outcome)'")
+        }
+        return outcome
+    }
+
     // MARK: - Internals
 
     /// codex バイナリの絶対パスを決定する。
@@ -509,6 +535,17 @@ actor CodexAppServerClient {
 
 struct EmptyParams: Encodable, Sendable {}
 
+/// `account/rateLimitResetCredit/consume` の引数。
+struct ConsumeResetCreditParams: Encodable, Sendable {
+    let idempotencyKey: String
+    let creditId: String?
+}
+
+/// 同 RPC の応答。outcome は "reset" / "nothingToReset" / "noCredit" / "alreadyRedeemed"。
+struct ConsumeResetCreditResponseDTO: Decodable, Sendable {
+    let outcome: String
+}
+
 struct InitializeParams: Encodable, Sendable {
     let clientInfo: ClientInfo
     let capabilities: Capabilities
@@ -547,6 +584,24 @@ struct InitializeParams: Encodable, Sendable {
 struct CodexRateLimitsDTO: Decodable, Sendable {
     let rateLimits: RateLimitSnapshot?
     let rateLimitsByLimitId: [String: RateLimitSnapshot]?
+    /// Codex が付与する「レート制限リセット権」の要約（2026-09 時点のスキーマで追加）。
+    /// 旧 CLI は返さないので Optional。
+    let rateLimitResetCredits: ResetCreditsSummary?
+
+    struct ResetCreditsSummary: Decodable, Sendable {
+        let availableCount: Int?
+        /// 明細。null は「枚数しか分からない」、空配列は「取得したが 0 件」。上限で切られることがある。
+        let credits: [ResetCredit]?
+    }
+
+    struct ResetCredit: Decodable, Sendable {
+        let id: String?
+        let title: String?
+        /// "available" / "redeeming" / "redeemed" / "unknown"
+        let status: String?
+        let grantedAt: Int64?
+        let expiresAt: Int64?
+    }
 
     struct RateLimitSnapshot: Decodable, Sendable {
         let limitId: String?
@@ -594,6 +649,21 @@ extension CodexRateLimitsDTO {
                       let limit = Self.toRateLimit(window) else { return nil }
                 return NamedRateLimit(id: key, title: title, limit: limit)
             }
+    }
+
+    /// 未使用のリセット権を抽出する。
+    ///
+    /// - 枚数は `availableCount` を正とする（明細は上限で切られることがあるため）
+    /// - 失効日時は明細のうち `status == "available"` かつ `expiresAt` があるものの最短
+    /// - `availableCount` が無い/0 のときは nil（表示しない）
+    func resetCredits() -> ResetCredits? {
+        guard let summary = rateLimitResetCredits,
+              let count = summary.availableCount, count > 0 else { return nil }
+        let expiries = (summary.credits ?? [])
+            .filter { $0.status == "available" }
+            .compactMap { $0.expiresAt }
+            .map { Date(timeIntervalSince1970: TimeInterval($0)) }
+        return ResetCredits(availableCount: count, earliestExpiry: expiries.min())
     }
 
     /// 指定分数のウィンドウを探す。primary/secondary 両方を見る。

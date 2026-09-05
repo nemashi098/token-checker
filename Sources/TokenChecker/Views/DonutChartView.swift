@@ -1,13 +1,17 @@
+import AppKit
 import SwiftUI
 
 /// 5h usage 1 本ぶんの円形プログレス。CCMeter の二重ドーナツから内側 7d を削除した版。
 ///
-/// 中央にどのサービスかを示す SF Symbol を表示する（メニューバーで Claude / Codex を一目で区別）。
+/// 中央にどのサービスかを示すロゴを表示する（メニューバーで Claude / Codex を一目で区別）。
 /// ドーナツ中央に何を描くかを表すモード。
 enum DonutCenter {
     case none
     case sfSymbol(String, scale: CGFloat = 0.48)
     case text(String, scale: CGFloat = 0.48)
+    /// 公式ロゴなどの画像。`isTemplate` な画像は primary 色で塗り、それ以外は元の色のまま描く。
+    /// 透過マージンを持つ素材は SF Symbol より大きめの scale が要る（ドーナツの穴は size − 2×lineWidth）。
+    case image(NSImage, scale: CGFloat = 0.6)
 }
 
 struct DonutChartView: View {
@@ -51,6 +55,14 @@ struct DonutChartView: View {
             Text(str)
                 .font(.system(size: size * scale, weight: .bold, design: .monospaced))
                 .foregroundStyle(.primary)
+        case .image(let image, let scale):
+            Image(nsImage: image)
+                .renderingMode(image.isTemplate ? .template : .original)
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fit)
+                .foregroundStyle(.primary)
+                .frame(width: size * scale, height: size * scale)
         }
     }
 

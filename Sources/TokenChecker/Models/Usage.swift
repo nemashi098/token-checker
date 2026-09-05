@@ -19,6 +19,35 @@ struct NamedRateLimit: Equatable, Sendable, Identifiable {
     let limit: RateLimit
 }
 
+/// Codex が無料で付与する「レート制限リセット権」。使うと週次枠などがその場で全回復する。
+/// 未使用の枚数と、そのうち最も早い失効日時（明細が無い場合は nil）。
+struct ResetCredits: Equatable, Sendable {
+    let availableCount: Int
+    let earliestExpiry: Date?
+}
+
+/// リセット権を使った結果（`account/rateLimitResetCredit/consume` の outcome）。
+enum ResetCreditRedeemOutcome: String, Decodable, Sendable, Equatable {
+    /// 消費して、対象の枠がリセットされた
+    case reset
+    /// 今リセットできる枠がない（権利は消費されない）
+    case nothingToReset
+    /// 使える権利が残っていない
+    case noCredit
+    /// 同じ idempotencyKey の操作が既に完了している
+    case alreadyRedeemed
+
+    var localizationKey: String { "reset_credit.outcome.\(rawValue)" }
+}
+
+/// 「使う」ボタンの進行状態。ビューはこれを見て進捗・結果を出す。
+enum ResetCreditRedeemState {
+    case idle
+    case working
+    case done(ResetCreditRedeemOutcome)
+    case failed(DomainError)
+}
+
 /// 1 サービス（Claude / Codex）の使用状況。
 struct ServiceUsage: Equatable, Sendable {
     let fiveHour: RateLimit?
@@ -27,6 +56,8 @@ struct ServiceUsage: Equatable, Sendable {
     let weeklySonnet: RateLimit?
     /// Claude のみ。Fable など、API の `limits` に現れるモデル別週次ウィンドウ。
     let scopedWeekly: [NamedRateLimit]
+    /// Codex のみ。未使用のリセット権。無ければ nil（行ごと非表示）。
+    var resetCredits: ResetCredits? = nil
 }
 
 /// 取得結果。片方が失敗しても他方は表示できるよう個別に保持。

@@ -27,7 +27,8 @@ struct MenuBarLabel: View {
                     value: claude.map(mode.barValue(for:)) ?? 0,
                     size: 20,
                     lineWidth: 3,
-                    center: .sfSymbol("sparkles", scale: 0.48),
+                    center: BrandAssets.claudeMark.map { DonutCenter.image($0, scale: 0.52) }
+                        ?? DonutCenter.sfSymbol("sparkles", scale: 0.48),
                     tint: claude.map { color(for: $0.utilization) }
                 )
                 Text(percentLabel(claude, mode: mode))
@@ -38,7 +39,8 @@ struct MenuBarLabel: View {
                     value: codex.map(mode.barValue(for:)) ?? 0,
                     size: 20,
                     lineWidth: 3,
-                    center: .sfSymbol("terminal.fill", scale: 0.48),
+                    center: BrandAssets.codexLogo.map { DonutCenter.image($0, scale: 0.68) }
+                        ?? DonutCenter.sfSymbol("terminal.fill", scale: 0.48),
                     tint: codex.map { color(for: $0.utilization) }
                 )
                 Text(percentLabel(codex, mode: mode))

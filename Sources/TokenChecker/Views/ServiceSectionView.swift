@@ -7,12 +7,23 @@ enum ServiceBrand {
     case claude
     case codex
 
+    /// ブランド色。ヘッダーのロゴ枠と、Claude マーク（template）の塗りに使う。
+    /// Claude は公式のテラコッタ (#D97757)、Codex は公式ロゴの青紫に合わせている。
     var tint: Color {
         switch self {
-        case .claude: Color(red: 0.83, green: 0.38, blue: 0.25)
-        case .codex: Color(red: 0.08, green: 0.53, blue: 0.42)
+        case .claude: Color(red: 0.85, green: 0.47, blue: 0.34)
+        case .codex: Color(red: 0.42, green: 0.50, blue: 0.97)
         }
     }
+}
+
+/// リセット権の「使う」ボタンの配線。Codex セクションだけが持ち、Claude は nil。
+struct ResetCreditRedeemControls {
+    let state: ResetCreditRedeemState
+    /// 確認ダイアログで OK された後に呼ばれる
+    let redeem: () -> Void
+    /// 結果表示を閉じる
+    let dismiss: () -> Void
 }
 
 struct ServiceSectionView: View {
@@ -25,6 +36,7 @@ struct ServiceSectionView: View {
     let language: AppLanguage
     let displayMode: UsageDisplayMode
     let loginAction: () -> Void
+    var redeem: ResetCreditRedeemControls? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -107,6 +119,143 @@ struct ServiceSectionView: View {
                 trend: trends["\(serviceID)-\(scoped.id)"]
             )
         }
+        if let credits = usage.resetCredits, credits.availableCount > 0 {
+            resetCreditsRow(credits)
+        }
+        // 結果表示は枚数が 0 になって上のカードが消えても残す（最後の 1 枚を使った直後など）
+        if let redeem {
+            redeemStateRow(redeem)
+        }
+    }
+
+    /// 「使う」の進行・結果を 1 行で出す。idle のときは何も描かない。
+    @ViewBuilder
+    private func redeemStateRow(_ redeem: ResetCreditRedeemControls) -> some View {
+        switch redeem.state {
+        case .idle:
+            EmptyView()
+        case .working:
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text(L10n.tr("reset_credit.working", language: language))
+                Spacer()
+            }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(Color.primary.opacity(0.68))
+        case .done(let outcome):
+            redeemMessage(
+                L10n.tr(outcome.localizationKey, language: language),
+                icon: outcome == .reset ? "checkmark.circle.fill" : "info.circle.fill",
+                color: outcome == .reset ? .green : .orange,
+                dismiss: redeem.dismiss
+            )
+        case .failed(let err):
+            redeemMessage(
+                L10n.format("reset_credit.failed", language: language, err.localizedDescription(language: language)),
+                icon: "exclamationmark.triangle.fill",
+                color: .red,
+                dismiss: redeem.dismiss
+            )
+        }
+    }
+
+    private func redeemMessage(_ text: String, icon: String, color: Color, dismiss: @escaping () -> Void) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(color)
+            Text(text)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 4)
+            Button(action: dismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .bold))
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(Color.primary.opacity(0.5))
+        }
+        .padding(8)
+        .background(color.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+
+    /// 権利を消費する操作なので、必ず確認ダイアログを挟む。OK のときだけ true。
+    private func confirmRedeem() -> Bool {
+        let alert = NSAlert()
+        alert.messageText = L10n.tr("reset_credit.confirm.title", language: language)
+        alert.informativeText = L10n.tr("reset_credit.confirm.body", language: language)
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: L10n.tr("reset_credit.confirm.ok", language: language))
+        alert.addButton(withTitle: L10n.tr("reset_credit.confirm.cancel", language: language))
+        NSApp.activate(ignoringOtherApps: true)
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    /// Codex の未使用リセット権。枠の行と同じ「ラベル＋大きい数字」の格で出すカード。
+    /// 失効まで 7 日以内なら全体を警告色にして「使い忘れ」を防ぐ。
+    private func resetCreditsRow(_ credits: ResetCredits) -> some View {
+        let expiringSoon = credits.earliestExpiry.map { $0.timeIntervalSinceNow <= 7 * 24 * 3600 } ?? false
+        let accent = expiringSoon ? Color.orange : brand.tint
+        var subtitle = L10n.tr("reset_credit.subtitle", language: language)
+        if let expiry = credits.earliestExpiry {
+            let formatter = DateFormatter()
+            formatter.locale = language.locale
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .none
+            subtitle += " · " + L10n.format("reset_credit.expires", language: language, formatter.string(from: expiry))
+        }
+        return HStack(alignment: .center, spacing: 10) {
+            ZStack {
+                Circle().fill(accent.opacity(0.18))
+                Image(systemName: "arrow.counterclockwise")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(accent)
+            }
+            .frame(width: 28, height: 28)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.tr("reset_credit.title", language: language))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Text(subtitle)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(expiringSoon ? accent : Color.primary.opacity(0.62))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            Spacer(minLength: 6)
+            Text(L10n.format("reset_credit.count", language: language, credits.availableCount))
+                .font(.system(size: 18, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(accent)
+            if let redeem {
+                let working: Bool = { if case .working = redeem.state { return true } else { return false } }()
+                Button {
+                    if confirmRedeem() { redeem.redeem() }
+                } label: {
+                    Text(L10n.tr("reset_credit.redeem", language: language))
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .tint(accent)
+                .disabled(working)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(accent.opacity(0.12))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(accent.opacity(0.35), lineWidth: 1)
+        )
+        .help(L10n.tr("reset_credit.help", language: language))
     }
 
     private func limitRow(
@@ -334,15 +483,35 @@ private struct BrandLogoView: View {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .stroke(brand.tint.opacity(0.22), lineWidth: 1)
 
+            // 公式ロゴ（BrandAssets）を優先し、素材が読めない場合だけ従来の手描き図形へ落とす。
             switch brand {
             case .claude:
-                ClaudeBurstMark()
-                    .stroke(brand.tint, style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
-                    .frame(width: 16, height: 16)
+                if let mark = BrandAssets.claudeMark {
+                    Image(nsImage: mark)
+                        .renderingMode(.template)
+                        .resizable()
+                        .interpolation(.high)
+                        .aspectRatio(contentMode: .fit)
+                        .foregroundStyle(brand.tint)
+                        .frame(width: 17, height: 17)
+                } else {
+                    ClaudeBurstMark()
+                        .stroke(brand.tint, style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                        .frame(width: 16, height: 16)
+                }
             case .codex:
-                OpenAINodeMark()
-                    .stroke(brand.tint, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
-                    .frame(width: 18, height: 18)
+                if let logo = BrandAssets.codexLogo {
+                    // 素材自体に約 6% の透過マージンがあるので、枠いっぱい近くまで広げる
+                    Image(nsImage: logo)
+                        .resizable()
+                        .interpolation(.high)
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 24, height: 24)
+                } else {
+                    OpenAINodeMark()
+                        .stroke(brand.tint, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+                        .frame(width: 18, height: 18)
+                }
             }
         }
         .frame(width: 28, height: 28)

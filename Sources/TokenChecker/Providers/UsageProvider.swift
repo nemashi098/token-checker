@@ -14,3 +14,10 @@ extension UsageProvider {
     /// stateless な実装向けのデフォルト。何もしない。
     func shutdown() async {}
 }
+
+/// リセット権を使える provider（現状 Codex のみ）。
+/// ViewModel は `codexProvider as? ResetCreditRedeemer` で能力の有無を判定する。
+protocol ResetCreditRedeemer: Sendable {
+    /// 1 枚使う。`idempotencyKey` は操作ごとに UUID を新しく作る。
+    func redeemResetCredit(idempotencyKey: String) async throws -> ResetCreditRedeemOutcome
+}

@@ -31,7 +31,12 @@ struct UsagePopoverView: View {
                 trends: viewModel.trends,
                 language: language,
                 displayMode: viewModel.displayMode,
-                loginAction: { viewModel.openCodexLogin() }
+                loginAction: { viewModel.openCodexLogin() },
+                redeem: ResetCreditRedeemControls(
+                    state: viewModel.codexRedeemState,
+                    redeem: { Task { await viewModel.redeemCodexResetCredit() } },
+                    dismiss: { viewModel.dismissCodexRedeemState() }
+                )
             )
 
             settingsBlock

@@ -124,6 +124,34 @@ final class UsageViewModel {
         }
     }
 
+    // MARK: - リセット権
+
+    /// 「使う」ボタンの進行状態。Codex セクションが表示する。
+    private(set) var codexRedeemState: ResetCreditRedeemState = .idle
+
+    /// Codex のリセット権を 1 枚使う。確認ダイアログは呼び出し側（ビュー）で済ませてから呼ぶ。
+    /// 成否にかかわらず終わったら使用量を取り直し、枠とリセット権の枚数を最新にする。
+    func redeemCodexResetCredit() async {
+        guard let redeemer = codexProvider as? ResetCreditRedeemer else { return }
+        if case .working = codexRedeemState { return }
+        codexRedeemState = .working
+        do {
+            let outcome = try await redeemer.redeemResetCredit(idempotencyKey: UUID().uuidString)
+            Logger.codex.info("reset credit redeem outcome: \(outcome.rawValue, privacy: .public)")
+            codexRedeemState = .done(outcome)
+        } catch let err as DomainError {
+            Logger.codex.error("reset credit redeem failed: \(err.localizedDescription)")
+            codexRedeemState = .failed(err)
+        } catch {
+            codexRedeemState = .failed(.network(error.localizedDescription))
+        }
+        await refresh()
+    }
+
+    func dismissCodexRedeemState() {
+        codexRedeemState = .idle
+    }
+
     // MARK: - ログインボタン
 
     /// どのサービスを再ログインするかは enum 型で表現する。
