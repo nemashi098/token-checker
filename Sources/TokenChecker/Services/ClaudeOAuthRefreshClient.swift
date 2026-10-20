@@ -64,7 +64,8 @@ struct ClaudeOAuthRefreshClient: Sendable {
                 expiresAt: Date(timeIntervalSinceNow: TimeInterval(token.expiresIn)),
                 scopes: credentials.scopes,
                 rateLimitTier: credentials.rateLimitTier,
-                subscriptionType: credentials.subscriptionType
+                subscriptionType: credentials.subscriptionType,
+                sourceFingerprint: credentials.fingerprint
             )
         } catch {
             throw DomainError.decoding("Claude OAuth refresh: \(error.localizedDescription)")

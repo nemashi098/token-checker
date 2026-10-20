@@ -28,7 +28,8 @@ final class CodexUsageProvider: UsageProvider, @unchecked Sendable {
             weekly: dto.weeklyRateLimit(),
             weeklySonnet: nil,
             scopedWeekly: dto.scopedWeeklyLimits(),
-            resetCredits: dto.resetCredits()
+            resetCredits: dto.resetCredits(),
+            shortWindowDurationMins: dto.shortWindowDurationMins
         )
     }
 

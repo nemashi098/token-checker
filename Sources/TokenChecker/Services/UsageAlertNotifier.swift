@@ -149,7 +149,9 @@ final class UsageAlertNotifier: NSObject, UNUserNotificationCenterDelegate, @unc
             windows.append(AlertWindow(
                 id: "\(serviceID)-five-hour",
                 serviceName: serviceName,
-                windowName: L10n.tr("window.five_hour", language: language),
+                windowName: usage.shortWindowDurationMins.flatMap { minutes in
+                    minutes == 300 ? nil : L10n.format("window.minutes", language: language, Int(minutes))
+                } ?? L10n.tr("window.five_hour", language: language),
                 limit: fiveHour
             ))
         }
@@ -173,7 +175,7 @@ final class UsageAlertNotifier: NSObject, UNUserNotificationCenterDelegate, @unc
             AlertWindow(
                 id: "\(serviceID)-\(scoped.id)",
                 serviceName: serviceName,
-                windowName: scoped.title,
+                windowName: scoped.displayTitle(language: language),
                 limit: scoped.limit
             )
         })

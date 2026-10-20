@@ -620,9 +620,20 @@ struct CodexRateLimitsDTO: Decodable, Sendable {
 }
 
 extension CodexRateLimitsDTO {
-    /// 5h (300 分) ウィンドウを抽出。
+    /// 共通の短期枠を抽出。300 分を優先し、新しい短期ウィンドウにも追従する。
     func fiveHourRateLimit() -> RateLimit? {
-        window(forDurationMins: 300).flatMap(Self.toRateLimit)
+        shortWindow.flatMap(Self.toRateLimit)
+    }
+
+    var shortWindowDurationMins: Int64? { shortWindow?.windowDurationMins }
+
+    private var shortWindow: Window? {
+        if let five = window(forDurationMins: 300) { return five }
+        guard let snapshot = mainSnapshot else { return nil }
+        return [snapshot.primary, snapshot.secondary].compactMap { $0 }.first {
+            guard let minutes = $0.windowDurationMins else { return false }
+            return minutes > 0 && minutes < 10080 && Self.toRateLimit($0) != nil
+        }
     }
 
     /// 週次 (10080 分) ウィンドウを抽出。
@@ -630,25 +641,25 @@ extension CodexRateLimitsDTO {
         window(forDurationMins: 10080).flatMap(Self.toRateLimit)
     }
 
-    /// `rateLimitsByLimitId` に入っているモデル別の枠を抽出する
-    /// （Claude の「Fable only」に相当。例: "codex_bengalfox" = GPT-5.3-Codex-Spark）。
-    ///
-    /// 含める条件:
-    ///   - `limitName` がある（メイン枠は limitName が null なので自然に除外される）
-    ///   - メイン `rateLimits` と同じ limitId ではない（二重表示防止）
-    ///   - primary ウィンドウが有効値を持つ
-    /// key ソートで表示順を安定させる（Dictionary の順序は起動ごとに変わるため）。
+    /// Discover model buckets from the server, preserving both short and weekly windows.
+    /// Names/IDs are supplied by the server, so new model versions require no allowlist.
     func scopedWeeklyLimits() -> [NamedRateLimit] {
-        let mainId = rateLimits?.limitId
-        return (rateLimitsByLimitId ?? [:])
-            .sorted(by: { $0.key < $1.key })
-            .compactMap { key, snap in
-                guard key != mainId,
-                      let title = snap.limitName, !title.isEmpty,
-                      let window = snap.primary,
-                      let limit = Self.toRateLimit(window) else { return nil }
-                return NamedRateLimit(id: key, title: title, limit: limit)
+        let mainId = mainSnapshot?.limitId ?? "codex"
+        return (rateLimitsByLimitId ?? [:]).sorted(by: { $0.key < $1.key }).flatMap { key, snapshot in
+            guard key != "codex", key != mainId, snapshot.limitId != mainId else { return [NamedRateLimit]() }
+            let title = snapshot.limitName?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = title.flatMap { $0.isEmpty ? nil : $0 } ?? snapshot.limitId ?? key
+            let windows = [snapshot.primary, snapshot.secondary].compactMap { $0 }
+            return windows.enumerated().compactMap { index, window -> NamedRateLimit? in
+                guard let limit = Self.toRateLimit(window) else { return nil }
+                return NamedRateLimit(
+                    id: index == 0 ? key : "\(key)-secondary",
+                    title: name,
+                    limit: limit,
+                    windowDurationMins: window.windowDurationMins
+                )
             }
+        }
     }
 
     /// 未使用のリセット権を抽出する。
@@ -666,24 +677,15 @@ extension CodexRateLimitsDTO {
         return ResetCredits(availableCount: count, earliestExpiry: expiries.min())
     }
 
-    /// 指定分数のウィンドウを探す。primary/secondary 両方を見る。
-    ///
-    /// 優先順位:
-    ///   1. トップレベル `rateLimits` … 現アカウントの直接スナップショット
-    ///   2. `rateLimitsByLimitId` … 複数 limitId が同居しうる。Dictionary の
-    ///      iteration 順は Hasher seed 依存で起動ごとに変動するため、
-    ///      key ソートで安定化してから走査する。
+    /// The common pool must never borrow a window from a model-specific pool.
+    private var mainSnapshot: RateLimitSnapshot? {
+        rateLimitsByLimitId?["codex"] ?? rateLimits
+    }
+
     private func window(forDurationMins minutes: Int64) -> Window? {
-        if let snap = rateLimits {
-            if let p = snap.primary,   p.windowDurationMins == minutes { return p }
-            if let s = snap.secondary, s.windowDurationMins == minutes { return s }
-        }
-        let sortedSnapshots = (rateLimitsByLimitId ?? [:]).sorted(by: { $0.key < $1.key })
-        for (_, snap) in sortedSnapshots {
-            if let p = snap.primary,   p.windowDurationMins == minutes { return p }
-            if let s = snap.secondary, s.windowDurationMins == minutes { return s }
-        }
-        return nil
+        guard let snapshot = mainSnapshot else { return nil }
+        return [snapshot.primary, snapshot.secondary].compactMap { $0 }
+            .first { $0.windowDurationMins == minutes && Self.toRateLimit($0) != nil }
     }
 
     /// `usedPercent` または `resetsAt` が欠落しているウィンドウは「データなし」として nil 返却。

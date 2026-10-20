@@ -17,6 +17,18 @@ struct NamedRateLimit: Equatable, Sendable, Identifiable {
     let id: String
     let title: String
     let limit: RateLimit
+    var windowDurationMins: Int64? = nil
+
+    func displayTitle(language: AppLanguage) -> String {
+        guard let minutes = windowDurationMins else { return title }
+        let window: String
+        switch minutes {
+        case 300: window = L10n.tr("window.five_hour", language: language)
+        case 10080: window = L10n.tr("window.weekly", language: language)
+        default: window = L10n.format("window.minutes", language: language, Int(minutes))
+        }
+        return "\(title)（\(window)）"
+    }
 }
 
 /// Codex が無料で付与する「レート制限リセット権」。使うと週次枠などがその場で全回復する。
@@ -54,10 +66,11 @@ struct ServiceUsage: Equatable, Sendable {
     let weekly: RateLimit?
     /// Claude のみ。Sonnet 専用 7d ウィンドウ。
     let weeklySonnet: RateLimit?
-    /// Claude のみ。Fable など、API の `limits` に現れるモデル別週次ウィンドウ。
+    /// API が返すモデル別の追加ウィンドウ（Codex は短期・週次の両方）。
     let scopedWeekly: [NamedRateLimit]
     /// Codex のみ。未使用のリセット権。無ければ nil（行ごと非表示）。
     var resetCredits: ResetCredits? = nil
+    var shortWindowDurationMins: Int64? = nil
 }
 
 /// 取得結果。片方が失敗しても他方は表示できるよう個別に保持。

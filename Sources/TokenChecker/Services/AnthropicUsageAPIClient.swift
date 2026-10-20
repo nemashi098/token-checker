@@ -87,6 +87,31 @@ struct AnthropicUsageDTO: Decodable, Sendable {
     let sevenDay: BucketDTO?
     let sevenDaySonnet: BucketDTO?
     let limits: [LimitDTO]?
+    let additionalWeekly: [String: BucketDTO]
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        fiveHour = try container.decodeIfPresent(BucketDTO.self, forKey: .fiveHour)
+        sevenDay = try container.decodeIfPresent(BucketDTO.self, forKey: .sevenDay)
+        sevenDaySonnet = try container.decodeIfPresent(BucketDTO.self, forKey: .sevenDaySonnet)
+        limits = try container.decodeIfPresent([LimitDTO].self, forKey: .limits)
+        let dynamic = try decoder.container(keyedBy: DynamicKey.self)
+        var extra: [String: BucketDTO] = [:]
+        for key in dynamic.allKeys where key.stringValue.hasPrefix("seven_day_")
+            && key.stringValue != "seven_day_sonnet" {
+            if let bucket = try? dynamic.decode(BucketDTO.self, forKey: key) {
+                extra[key.stringValue] = bucket
+            }
+        }
+        additionalWeekly = extra
+    }
+
+    private struct DynamicKey: CodingKey {
+        let stringValue: String
+        var intValue: Int? { nil }
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { return nil }
+    }
 
     enum CodingKeys: String, CodingKey {
         case fiveHour = "five_hour"
@@ -138,7 +163,7 @@ struct AnthropicUsageDTO: Decodable, Sendable {
 
 extension AnthropicUsageDTO.BucketDTO {
     func toRateLimit() -> RateLimit? {
-        guard let utilization, let resetsAt else { return nil }
+        guard let utilization, utilization.isFinite, let resetsAt else { return nil }
         guard let date = ISO8601DateFormatter.standard.date(from: resetsAt)
                        ?? ISO8601DateFormatter.withFractional.date(from: resetsAt) else {
             return nil
@@ -150,10 +175,11 @@ extension AnthropicUsageDTO.BucketDTO {
 extension AnthropicUsageDTO {
     func scopedWeeklyRateLimits(defaultResetsAt: Date?) -> [NamedRateLimit] {
         var seenIDs = Set<String>()
-        return (limits ?? []).compactMap { entry in
+        let scoped: [NamedRateLimit] = (limits ?? []).compactMap { entry in
             guard entry.group == "weekly", entry.kind == "weekly_scoped" else { return nil }
             guard let percent = entry.percent, percent.isFinite else { return nil }
-            guard let modelName = entry.scope?.model?.displayName?.trimmedNonEmpty else { return nil }
+            guard let modelName = entry.scope?.model?.displayName?.trimmedNonEmpty
+                ?? entry.scope?.model?.id?.trimmedNonEmpty else { return nil }
             guard let date = Self.parseDate(entry.resetsAt) ?? defaultResetsAt else { return nil }
 
             let identity = entry.scope?.model?.id?.trimmedNonEmpty ?? modelName
@@ -168,6 +194,23 @@ extension AnthropicUsageDTO {
                 limit: RateLimit(utilization: percent / 100.0, resetsAt: date)
             )
         }
+        // Legacy APIs expose model buckets as seven_day_<model>. Discover keys rather
+        // than hard-coding model versions. Prefer the newer named limit on overlap.
+        let legacy = additionalWeekly.sorted { $0.key < $1.key }.compactMap { key, bucket -> NamedRateLimit? in
+            guard let limit = bucket.toRateLimit() else { return nil }
+            let model = String(key.dropFirst("seven_day_".count))
+            let slug = Self.slug(model)
+            guard !scoped.contains(where: { entry in
+                let words = Self.slug(entry.title).split(separator: "-").map(String.init)
+                return words.contains(slug) || entry.id.hasSuffix("-" + slug)
+            }) else { return nil }
+            return NamedRateLimit(
+                id: "claude-weekly-scoped-\(slug)",
+                title: model.split(separator: "_").map { $0.capitalized }.joined(separator: " ") + " only",
+                limit: limit
+            )
+        }
+        return scoped + legacy
     }
 
     private static func parseDate(_ value: String?) -> Date? {

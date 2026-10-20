@@ -1,8 +1,8 @@
 "error.anthropic_http" = "Anthropic API error (status %d)";
-"error.anthropic_oauth_refresh_failed" = "Claude OAuth token refresh failed. Run `claude login` again.";
+"error.anthropic_oauth_refresh_failed" = "Claude OAuth token refresh failed. Run `claude auth login` again.";
 "error.anthropic_rate_limited" = "Anthropic API rate limit reached (429). Waiting until the next polling interval.";
 "error.anthropic_rate_limited_with_retry" = "Anthropic API rate limit reached. Retrying automatically in about %d min.";
-"error.anthropic_unauthorized" = "Anthropic authentication error (401). Run `claude login` again.";
+"error.anthropic_unauthorized" = "Anthropic authentication error (401). Run `claude auth login` again.";
 "error.codex_cli_not_found" = "Codex CLI was not found. Run `npm i -g @openai/codex`.";
 "error.codex_daemon_failed" = "codex app-server daemon start failed (exit=%d)";
 "error.codex_daemon_spawn_failed" = "codex app-server daemon start failed to launch: %@";
@@ -15,7 +15,7 @@
 "error.invalid_response" = "Invalid response.";
 "error.keychain_cache_failed" = "Failed to update TokenChecker Keychain cache (status %d)";
 "error.keychain_read_failed" = "Failed to read Claude Code Keychain item (status %d). Check Keychain access permission.";
-"error.keychain_token_missing" = "Claude Code OAuth token was not found in Keychain or is empty. Run `claude login` in Terminal.";
+"error.keychain_token_missing" = "Claude Code OAuth token was not found in Keychain or the credential file, or is empty. Run `claude auth login` in Terminal.";
 "error.network" = "Network error: %@";
 "error.timeout" = "The request timed out.";
 "error.unknown" = "Unknown cause";
@@ -75,3 +75,5 @@
 "reset_credit.outcome.noCredit" = "No reset credits left";
 "reset_credit.outcome.alreadyRedeemed" = "This reset was already completed";
 "reset_credit.failed" = "Reset failed: %@";
+
+"window.minutes" = "%d min";

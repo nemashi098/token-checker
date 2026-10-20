@@ -8,7 +8,7 @@ macOS のメニューバーに Claude Code と Codex の使用率を常時表示
 
 ## 概要
 
-ターミナルで `claude login` / `codex login` を完了済みのアカウントに対し、Anthropic の OAuth エンドポイントおよび `codex app-server` の JSON-RPC を経由してレート制限情報を取得する。取得結果はメニューバーに 2 個のドーナツチャートと数値で表示され、クリックでポップオーバーに 5 時間ウィンドウと週次ウィンドウの詳細を展開する。
+ターミナルで `claude auth login` / `codex login` を完了済みのアカウントに対し、Anthropic の OAuth エンドポイントおよび `codex app-server` の JSON-RPC を経由してレート制限情報を取得する。取得結果はメニューバーに 2 個のドーナツチャートと数値で表示され、クリックでポップオーバーに 5 時間ウィンドウと週次ウィンドウの詳細を展開する。
 
 ## 動作要件
 
@@ -16,7 +16,7 @@ macOS のメニューバーに Claude Code と Codex の使用率を常時表示
 | --- | --- |
 | macOS | 14 Sonoma 以上 |
 | Swift | 5.9 以上（Xcode Command Line Tools で可） |
-| Claude Code CLI | `claude login` 済み |
+| Claude Code CLI | `claude auth login` 済み |
 | Codex CLI | `codex login` 済み |
 
 Claude Code と Codex のいずれかが欠けていても、もう一方は動作する。
@@ -43,7 +43,7 @@ open /Applications/TokenChecker.app
 事前にターミナルで以下を実行し、両サービスにログインしておく。
 
 ```bash
-claude login
+claude auth login
 codex login
 ```
 
@@ -60,6 +60,14 @@ codex login
 
 - **Claude**: `/usr/bin/security` 経由で Keychain (`Claude Code-credentials`) から OAuth アクセストークンを取得し、`https://api.anthropic.com/api/oauth/usage` に対して `anthropic-beta: oauth-2025-04-20` ヘッダー付きで GET する。
 - **Codex**: `codex` バイナリを子プロセスとして起動し、行区切り JSON-RPC 経由で `account/rateLimits/read` を呼ぶ。バイナリの場所は Codex/ChatGPT デスクトップアプリ内、および Homebrew / nodebrew / nvm / volta / asdf / fnm 等の主要なインストール先を順に探索し、見つからない場合はログインシェル経由で `command -v codex` を解決する。`UserDefaults` の `codexPath` キーで手動指定も可能 (`defaults write com.token-checker.app codexPath /abs/path/codex`)。起動コマンドは CLI バージョンに応じて自動的に切り替わる (`codex app-server daemon start` + `codex app-server proxy` 形式と `codex app-server` 単体形式の双方をサポート)。
+
+## 現行 CLI・新モデルへの対応
+
+Claude Code の `claude auth login --claudeai` でログインする。Keychain のほか、公式 CLI が Keychain を使えない場合に保存する `~/.claude/.credentials.json` も読み取る。`CLAUDE_CONFIG_DIR` / `CLAUDE_SECURESTORAGE_CONFIG_DIR` を指定して起動した場合は、そのプロファイルの認証情報だけを使う。
+
+モデル名・バージョンの許可リストは持たない。Claude の `limits` と `seven_day_<model>`、Codex の `rateLimitsByLimitId` から返された名前・利用枠を表示する。Codex のモデル別枠は短期・週次の両方を表示し、共通枠と混同しない。サーバーがモデル別内訳を返さない場合は共通枠のみを表示する。
+
+macOS SDK と Command Line Tools の組み合わせを明示する必要がある場合は、`TOKEN_CHECKER_SWIFT_SDK`（SDK のパス）、`TOKEN_CHECKER_BUILD_SYSTEM`、`TOKEN_CHECKER_BUILD_PATH` をビルドスクリプトに渡せる。
 
 ## アップデート
 
@@ -104,7 +112,7 @@ A macOS menu bar application that displays Claude Code and Codex usage in real t
 
 ## Overview
 
-For accounts already authenticated via `claude login` / `codex login`, this app retrieves rate-limit information through the Anthropic OAuth endpoint and the `codex app-server` JSON-RPC. Results are shown as two donut charts with numeric values in the menu bar; clicking opens a popover with detailed 5-hour and weekly window data.
+For accounts already authenticated via `claude auth login` / `codex login`, this app retrieves rate-limit information through the Anthropic OAuth endpoint and the `codex app-server` JSON-RPC. Results are shown as two donut charts with numeric values in the menu bar; clicking opens a popover with detailed 5-hour and weekly window data.
 
 ## Requirements
 
@@ -112,7 +120,7 @@ For accounts already authenticated via `claude login` / `codex login`, this app 
 | --- | --- |
 | macOS | 14 Sonoma or later |
 | Swift | 5.9 or later (Xcode Command Line Tools is sufficient) |
-| Claude Code CLI | authenticated via `claude login` |
+| Claude Code CLI | authenticated via `claude auth login` |
 | Codex CLI | authenticated via `codex login` |
 
 If only one of Claude Code or Codex is available, the other still works.
@@ -138,7 +146,7 @@ open /Applications/TokenChecker.app
 First, log in to both services from the terminal:
 
 ```bash
-claude login
+claude auth login
 codex login
 ```
 

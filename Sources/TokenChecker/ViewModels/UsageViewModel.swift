@@ -162,7 +162,7 @@ final class UsageViewModel {
 
         var command: String {
             switch self {
-            case .claude: return "claude login"
+            case .claude: return "claude auth login --claudeai"
             case .codex:  return "codex login"
             }
         }

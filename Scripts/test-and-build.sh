@@ -27,8 +27,20 @@ if [[ -d "${FRAMEWORKS}" ]]; then
     )
 fi
 
+# Optional toolchain selection for Command Line Tools installations with multiple SDKs.
+SWIFT_BUILD_OPTIONS=()
+if [[ -n "${TOKEN_CHECKER_SWIFT_SDK:-}" ]]; then
+    SWIFT_BUILD_OPTIONS+=(--sdk "${TOKEN_CHECKER_SWIFT_SDK}")
+fi
+if [[ -n "${TOKEN_CHECKER_BUILD_SYSTEM:-}" ]]; then
+    SWIFT_BUILD_OPTIONS+=(--build-system "${TOKEN_CHECKER_BUILD_SYSTEM}")
+fi
+if [[ -n "${TOKEN_CHECKER_BUILD_PATH:-}" ]]; then
+    SWIFT_BUILD_OPTIONS+=(--scratch-path "${TOKEN_CHECKER_BUILD_PATH}")
+fi
+
 echo "[test-and-build] swift test 実行中..."
-swift test "${EXTRA_FLAGS[@]+"${EXTRA_FLAGS[@]}"}"
+swift test "${SWIFT_BUILD_OPTIONS[@]+"${SWIFT_BUILD_OPTIONS[@]}"}" "${EXTRA_FLAGS[@]+"${EXTRA_FLAGS[@]}"}"
 
 echo "[test-and-build] テスト成功。アプリをビルドします..."
 ./Scripts/build.sh

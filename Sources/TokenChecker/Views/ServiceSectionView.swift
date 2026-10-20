@@ -78,7 +78,7 @@ struct ServiceSectionView: View {
     private func usageBlock(_ usage: ServiceUsage) -> some View {
         if let five = usage.fiveHour {
             limitRow(
-                label: L10n.tr("window.five_hour", language: language),
+                label: shortWindowLabel(usage.shortWindowDurationMins),
                 limit: five,
                 prominent: true,
                 showsReset: true,
@@ -112,7 +112,7 @@ struct ServiceSectionView: View {
         }
         ForEach(usage.scopedWeekly) { scoped in
             limitRow(
-                label: scoped.title,
+                label: scoped.displayTitle(language: language),
                 limit: scoped.limit,
                 prominent: false,
                 showsReset: true,
@@ -126,6 +126,11 @@ struct ServiceSectionView: View {
         if let redeem {
             redeemStateRow(redeem)
         }
+    }
+
+    private func shortWindowLabel(_ minutes: Int64?) -> String {
+        guard let minutes, minutes != 300 else { return L10n.tr("window.five_hour", language: language) }
+        return L10n.format("window.minutes", language: language, Int(minutes))
     }
 
     /// 「使う」の進行・結果を 1 行で出す。idle のときは何も描かない。

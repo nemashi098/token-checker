@@ -56,7 +56,7 @@ import Testing
         #expect(try decode(realPayload).fiveHourRateLimit() == nil)
     }
 
-    @Test func namelessOrBrokenEntriesAreSkipped() throws {
+    @Test func namelessEntriesUseServerIDAndBrokenEntriesAreSkipped() throws {
         let dto = try decode("""
         {
           "rateLimits": null,
@@ -72,7 +72,7 @@ import Testing
           }
         }
         """)
-        #expect(dto.scopedWeeklyLimits().isEmpty)
+        #expect(dto.scopedWeeklyLimits().map(\.title) == ["a_no_name"])
     }
 
     @Test func scopedOrderIsStable() throws {
@@ -90,5 +90,53 @@ import Testing
         }
         """)
         #expect(dto.scopedWeeklyLimits().map(\.id) == ["a_model", "z_model"])
+    }
+}
+
+@Suite struct CodexLatestModelCompatibilityTests {
+    private func decode(_ json: String) throws -> CodexRateLimitsDTO {
+        try JSONDecoder().decode(CodexRateLimitsDTO.self, from: Data(json.utf8))
+    }
+
+    @Test func futureModelIncludesBothWindowsAndServerName() throws {
+        let dto = try decode("""
+        {"rateLimits":{"limitId":"codex","primary":{"usedPercent":20,"windowDurationMins":10080,"resetsAt":2000000000}},
+         "rateLimitsByLimitId":{"codex_future":{"limitId":"codex_future","limitName":"GPT-6.1-Astra",
+           "primary":{"usedPercent":35,"windowDurationMins":300,"resetsAt":2000000000},
+           "secondary":{"usedPercent":45,"windowDurationMins":10080,"resetsAt":2000000000}}}}
+        """)
+        let rows = dto.scopedWeeklyLimits()
+        #expect(rows.map(\.title) == ["GPT-6.1-Astra", "GPT-6.1-Astra"])
+        #expect(rows.map(\.windowDurationMins) == [300, 10080])
+        #expect(Set(rows.map(\.id)).count == 2)
+        #expect(dto.fiveHourRateLimit() == nil)
+        #expect(dto.weeklyRateLimit()?.percent == 20)
+    }
+
+    @Test func mapOnlyCommonBucketIsNotRepeated() throws {
+        let dto = try decode("""
+        {"rateLimitsByLimitId":{"codex":{"limitId":"codex","limitName":"Codex",
+          "primary":{"usedPercent":18,"windowDurationMins":10080,"resetsAt":2000000000}}}}
+        """)
+        #expect(dto.weeklyRateLimit()?.percent == 18)
+        #expect(dto.scopedWeeklyLimits().isEmpty)
+    }
+
+    @Test func modelOnlyBucketsDoNotMasqueradeAsCommonUsage() throws {
+        let dto = try decode("""
+        {"rateLimitsByLimitId":{"new_model":{"limitName":"New model",
+          "primary":{"usedPercent":18,"windowDurationMins":10080,"resetsAt":2000000000}}}}
+        """)
+        #expect(dto.weeklyRateLimit() == nil)
+        #expect(dto.scopedWeeklyLimits().first?.limit.percent == 18)
+    }
+
+    @Test func supportsNewShortWindowDuration() throws {
+        let dto = try decode("""
+        {"rateLimits":{"limitId":"codex",
+          "primary":{"usedPercent":31,"windowDurationMins":15,"resetsAt":2000000000}}}
+        """)
+        #expect(dto.fiveHourRateLimit()?.percent == 31)
+        #expect(CodexUsageProvider.usage(from: dto).shortWindowDurationMins == 15)
     }
 }

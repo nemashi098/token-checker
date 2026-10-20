@@ -1,8 +1,8 @@
 "error.anthropic_http" = "Anthropic API 错误（状态 %d）";
-"error.anthropic_oauth_refresh_failed" = "Claude OAuth token 自动刷新失败。请重新运行 `claude login`。";
+"error.anthropic_oauth_refresh_failed" = "Claude OAuth token 自动刷新失败。请重新运行 `claude auth login`。";
 "error.anthropic_rate_limited" = "Anthropic API 已达到速率限制（429）。将等到下次轮询再试。";
 "error.anthropic_rate_limited_with_retry" = "Anthropic API 已达到速率限制。约 %d 分钟后自动重试。";
-"error.anthropic_unauthorized" = "Anthropic 认证错误（401）。请重新运行 `claude login`。";
+"error.anthropic_unauthorized" = "Anthropic 认证错误（401）。请重新运行 `claude auth login`。";
 "error.codex_cli_not_found" = "未找到 Codex CLI。请运行 `npm i -g @openai/codex`。";
 "error.codex_daemon_failed" = "codex app-server daemon start 失败（退出码=%d）";
 "error.codex_daemon_spawn_failed" = "codex app-server daemon start 启动失败：%@";
@@ -15,7 +15,7 @@
 "error.invalid_response" = "无效响应。";
 "error.keychain_cache_failed" = "TokenChecker Keychain 缓存更新失败（状态 %d）";
 "error.keychain_read_failed" = "Claude Code Keychain 项读取失败（状态 %d）。请检查 Keychain 访问权限。";
-"error.keychain_token_missing" = "Keychain 中未找到 Claude Code OAuth token，或 token 为空。请在终端运行 `claude login`。";
+"error.keychain_token_missing" = "Keychain 或凭据文件中未找到 Claude Code OAuth token，或 token 为空。请在终端运行 `claude auth login`。";
 "error.network" = "网络错误：%@";
 "error.timeout" = "请求超时。";
 "error.unknown" = "原因不明";
@@ -75,3 +75,5 @@
 "reset_credit.outcome.noCredit" = "没有可用的重置次数";
 "reset_credit.outcome.alreadyRedeemed" = "此操作已完成";
 "reset_credit.failed" = "重置失败: %@";
+
+"window.minutes" = "%d 分钟";

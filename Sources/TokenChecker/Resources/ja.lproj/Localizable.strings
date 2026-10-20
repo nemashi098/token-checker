@@ -1,8 +1,8 @@
 "error.anthropic_http" = "Anthropic API エラー (status %d)";
-"error.anthropic_oauth_refresh_failed" = "Claude OAuth トークンの自動更新に失敗しました。`claude login` で再ログインしてください。";
+"error.anthropic_oauth_refresh_failed" = "Claude OAuth トークンの自動更新に失敗しました。`claude auth login` で再ログインしてください。";
 "error.anthropic_rate_limited" = "Anthropic API のレート制限 (429)。次回ポーリングまで待機します。";
 "error.anthropic_rate_limited_with_retry" = "Anthropic API のレート制限に達しました。約 %d 分後に自動で再試行します。";
-"error.anthropic_unauthorized" = "Anthropic からの認証エラー (401)。`claude login` で再ログインしてください。";
+"error.anthropic_unauthorized" = "Anthropic からの認証エラー (401)。`claude auth login` で再ログインしてください。";
 "error.codex_cli_not_found" = "Codex CLI が見つかりません。`npm i -g @openai/codex` を実行してください。";
 "error.codex_daemon_failed" = "codex app-server daemon start に失敗しました (exit=%d)";
 "error.codex_daemon_spawn_failed" = "codex app-server daemon start の起動に失敗しました: %@";
@@ -15,7 +15,7 @@
 "error.invalid_response" = "不正なレスポンスです。";
 "error.keychain_cache_failed" = "TokenChecker の Keychain キャッシュ更新に失敗しました (status %d)";
 "error.keychain_read_failed" = "Claude Code の Keychain 読み取りに失敗しました (status %d)。Keychain の許可を確認してください。";
-"error.keychain_token_missing" = "Claude Code の OAuth トークンが Keychain に見つからないか空です。ターミナルで `claude login` を実行してください。";
+"error.keychain_token_missing" = "Claude Code の OAuth トークンが Keychain または認証ファイルに見つからないか空です。ターミナルで `claude auth login` を実行してください。";
 "error.network" = "ネットワークエラー: %@";
 "error.timeout" = "通信がタイムアウトしました。";
 "error.unknown" = "原因不明";
@@ -75,3 +75,5 @@
 "reset_credit.outcome.noCredit" = "使える権利が残っていません";
 "reset_credit.outcome.alreadyRedeemed" = "この操作は既に完了しています";
 "reset_credit.failed" = "リセットに失敗: %@";
+
+"window.minutes" = "%d分";

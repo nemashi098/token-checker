@@ -65,14 +65,27 @@ done
 
 cd "${PROJECT_DIR}"
 
+# Optional toolchain selection for Command Line Tools installations with multiple SDKs.
+SWIFT_BUILD_OPTIONS=()
+if [[ -n "${TOKEN_CHECKER_SWIFT_SDK:-}" ]]; then
+    SWIFT_BUILD_OPTIONS+=(--sdk "${TOKEN_CHECKER_SWIFT_SDK}")
+fi
+if [[ -n "${TOKEN_CHECKER_BUILD_SYSTEM:-}" ]]; then
+    SWIFT_BUILD_OPTIONS+=(--build-system "${TOKEN_CHECKER_BUILD_SYSTEM}")
+fi
+if [[ -n "${TOKEN_CHECKER_BUILD_PATH:-}" ]]; then
+    SWIFT_BUILD_OPTIONS+=(--scratch-path "${TOKEN_CHECKER_BUILD_PATH}")
+fi
+
 if ${DO_CLEAN}; then
     info "Cleaning build artifacts..."
-    swift package clean
+    swift package --scratch-path "${TOKEN_CHECKER_BUILD_PATH:-.build}" clean
     rm -rf "${APP_BUNDLE}"
 fi
 
 info "Building ${PRODUCT} (release)..."
-swift build -c release
+swift build -c release "${SWIFT_BUILD_OPTIONS[@]+"${SWIFT_BUILD_OPTIONS[@]}"}"
+BUILD_DIR=$(swift build -c release "${SWIFT_BUILD_OPTIONS[@]+"${SWIFT_BUILD_OPTIONS[@]}"}" --show-bin-path)
 
 info "Assembling ${APP_BUNDLE}..."
 rm -rf "${APP_BUNDLE}"

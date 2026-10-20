@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import CryptoKit
 
 struct ClaudeOAuthCredentials: Codable, Equatable, Sendable {
     let accessToken: String
@@ -8,6 +9,12 @@ struct ClaudeOAuthCredentials: Codable, Equatable, Sendable {
     let scopes: [String]
     let rateLimitTier: String?
     let subscriptionType: String?
+    var sourceFingerprint: String? = nil
+
+    var fingerprint: String {
+        sourceFingerprint ?? SHA256.hash(data: Data((accessToken + "\0" + (refreshToken ?? "")).utf8))
+            .map { String(format: "%02x", $0) }.joined()
+    }
 
     /// Refresh slightly early so a token does not expire between fetching and calling the usage API.
     var isExpired: Bool {
@@ -23,7 +30,13 @@ struct ClaudeOAuthCredentials: Codable, Equatable, Sendable {
 /// 安定する。
 struct KeychainTokenSource: Sendable {
     static let serviceName = "Claude Code-credentials"
-    private let cache = ClaudeOAuthCache()
+    let location: ClaudeCredentialLocation
+    private let cache: ClaudeOAuthCache
+
+    init(location: ClaudeCredentialLocation = .init()) {
+        self.location = location
+        self.cache = ClaudeOAuthCache(account: location.serviceName)
+    }
 
     /// 旧呼び出し向け。新しい実装では refreshToken / expiresAt も読む。
     func readAccessToken() async throws -> String {
@@ -34,7 +47,8 @@ struct KeychainTokenSource: Sendable {
         let cliCredentials = try await readClaudeCodeCredentials()
         guard cliCredentials.isExpired else { return cliCredentials }
 
-        if let cached = cache.read(), !cached.isExpired {
+        if let cached = cache.read(),
+           cached.sourceFingerprint == cliCredentials.fingerprint, !cached.isExpired {
             return cached
         }
 
@@ -46,52 +60,41 @@ struct KeychainTokenSource: Sendable {
     }
 
     private func readClaudeCodeCredentials() async throws -> ClaudeOAuthCredentials {
-        try await readClaudeCodeCredentialsWithSecurityTool()
+        var keychainError: DomainError = .keychainTokenMissing
+        do {
+            return try await readClaudeCodeCredentialsWithSecurityTool()
+        } catch let error as DomainError {
+            keychainError = error
+        }
+        // Current Claude Code also uses this file when macOS Keychain writes fail.
+        // Only read the selected profile; never fall back to a different account.
+        if FileManager.default.fileExists(atPath: location.credentialsURL.path) {
+            do {
+                return try KeychainPayload.credentials(from: Data(contentsOf: location.credentialsURL))
+            } catch let error as DomainError {
+                throw error
+            } catch {
+                // Decoder errors can contain credential values. Do not expose their details.
+                throw DomainError.decoding("Claude credential file")
+            }
+        }
+        throw keychainError
     }
 
     private func readClaudeCodeCredentialsWithSecurityTool() async throws -> ClaudeOAuthCredentials {
         let username = ProcessInfo.processInfo.environment["USER"] ?? NSUserName()
-        let loginKeychainPath = "\(NSHomeDirectory())/Library/Keychains/login.keychain-db"
         let argumentSets = [
-            [
-                "find-generic-password",
-                "-a", username,
-                "-s", Self.serviceName,
-                "-w",
-                loginKeychainPath,
-            ],
-            [
-                "find-generic-password",
-                "-s", Self.serviceName,
-                "-w",
-                loginKeychainPath,
-            ],
-            [
-                "find-generic-password",
-                "-a", username,
-                "-s", Self.serviceName,
-                "-w",
-            ],
-            [
-                "find-generic-password",
-                "-s", Self.serviceName,
-                "-w",
-            ],
+            ["find-generic-password", "-a", username, "-s", location.serviceName, "-w"],
+            ["find-generic-password", "-s", location.serviceName, "-w"],
         ]
-
-        var lastError: DomainError?
         for arguments in argumentSets {
             do {
-                let credentials = try await readClaudeCodeCredentialsWithSecurityTool(arguments: arguments)
-                return credentials
-            } catch let error as DomainError {
-                lastError = error
-            } catch {
-                lastError = .decoding("Keychain payload: \(error.localizedDescription)")
+                return try await readClaudeCodeCredentialsWithSecurityTool(arguments: arguments)
+            } catch DomainError.keychainTokenMissing {
+                continue
             }
         }
-
-        throw lastError ?? DomainError.keychainTokenMissing
+        throw DomainError.keychainTokenMissing
     }
 
     private func readClaudeCodeCredentialsWithSecurityTool(arguments: [String]) async throws -> ClaudeOAuthCredentials {
@@ -125,7 +128,8 @@ struct KeychainTokenSource: Sendable {
         }
 
         guard process.terminationStatus == 0 else {
-            throw DomainError.keychainTokenMissing
+            if process.terminationStatus == 44 { throw DomainError.keychainTokenMissing }
+            throw DomainError.keychainReadFailed(status: process.terminationStatus)
         }
 
         let data = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
@@ -134,13 +138,40 @@ struct KeychainTokenSource: Sendable {
         } catch let error as DomainError {
             throw error
         } catch {
-            throw DomainError.decoding("Keychain payload: \(error.localizedDescription)")
+            throw DomainError.decoding("Claude Keychain payload")
         }
     }
 }
 
-/// Claude Code が Keychain に保存する JSON 構造。
-private struct KeychainPayload: Decodable {
+/// Match Claude Code's profile-specific storage naming (including Unicode normalization).
+struct ClaudeCredentialLocation: Sendable {
+    let directory: URL
+    let serviceName: String
+    var credentialsURL: URL { directory.appendingPathComponent(".credentials.json") }
+
+    init(environment: [String: String] = ProcessInfo.processInfo.environment,
+         home: String = NSHomeDirectory()) {
+        let secureDirectory = environment["CLAUDE_SECURESTORAGE_CONFIG_DIR"]
+        let configDirectory = environment["CLAUDE_CONFIG_DIR"].flatMap { $0.isEmpty ? nil : $0 }
+        let customDirectory: String?
+        if let secureDirectory {
+            customDirectory = secureDirectory.isEmpty ? nil : secureDirectory
+        } else {
+            customDirectory = configDirectory
+        }
+        let path = (customDirectory ?? home + "/.claude").precomposedStringWithCanonicalMapping
+        directory = URL(fileURLWithPath: path, isDirectory: true)
+        if customDirectory != nil {
+            let suffix = SHA256.hash(data: Data(path.utf8)).map { String(format: "%02x", $0) }.joined().prefix(8)
+            serviceName = KeychainTokenSource.serviceName + "-" + suffix
+        } else {
+            serviceName = KeychainTokenSource.serviceName
+        }
+    }
+}
+
+/// Claude Code が Keychain / fallback file に保存する JSON 構造。
+struct KeychainPayload: Decodable {
     let claudeAiOauth: OAuth?
 
     enum CodingKeys: String, CodingKey {
@@ -203,7 +234,10 @@ private struct KeychainPayload: Decodable {
         return ClaudeOAuthCredentials(
             accessToken: accessToken,
             refreshToken: oauth.refreshToken?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
-            expiresAt: oauth.expiresAt.map { Date(timeIntervalSince1970: $0 / 1000.0) },
+            expiresAt: oauth.expiresAt.flatMap { value in
+                guard value.isFinite, value > 0 else { return nil }
+                return Date(timeIntervalSince1970: value > 100_000_000_000 ? value / 1000.0 : value)
+            },
             scopes: oauth.scopes ?? [],
             rateLimitTier: oauth.rateLimitTier,
             subscriptionType: oauth.subscriptionType
@@ -213,13 +247,13 @@ private struct KeychainPayload: Decodable {
 
 private struct ClaudeOAuthCache: Sendable {
     private static let service = "TokenChecker Claude OAuth Cache"
-    private static let account = "default"
+    let account: String
 
     func read() -> ClaudeOAuthCredentials? {
         let query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: Self.service,
-            kSecAttrAccount: Self.account,
+            kSecAttrAccount: account,
             kSecReturnData: true,
             kSecMatchLimit: kSecMatchLimitOne,
         ]
@@ -235,7 +269,7 @@ private struct ClaudeOAuthCache: Sendable {
         let query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: Self.service,
-            kSecAttrAccount: Self.account,
+            kSecAttrAccount: account,
         ]
 
         let attributes: [CFString: Any] = [
